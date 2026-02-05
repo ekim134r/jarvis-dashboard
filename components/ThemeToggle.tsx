@@ -55,7 +55,11 @@ export default function ThemeToggle() {
   };
 
   return (
-    <button type="button" className="theme-toggle" onClick={cycleMode}>
+    <button 
+      type="button" 
+      className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text shadow-sm transition-all hover:bg-surface-muted hover:shadow-md active:scale-95" 
+      onClick={cycleMode}
+    >
       Theme: {label}
     </button>
   );

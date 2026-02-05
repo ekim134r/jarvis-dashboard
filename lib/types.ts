@@ -1,4 +1,4 @@
-export type Priority = "Low" | "Medium" | "High";
+export type Priority = "P0" | "P1" | "P2" | "P3";
 export type Level = "Low" | "Medium" | "High";
 
 export type EncryptedString = string;
@@ -22,6 +22,11 @@ export type Task = {
   priority: Priority;
   tags: string[];
   description: string;
+  owner?: "Mika" | "Jarvis";
+  nextAction: string; // Added nextAction
+  swarmRequired?: boolean;
+  processingMode?: "realtime" | "batch";
+  batchJobId?: string;
   notes: string;
   sensitiveNotes: EncryptedString;
   privateNumbers?: EncryptedString;
@@ -106,6 +111,167 @@ export type Experiment = {
   updatedAt: string;
 };
 
+export type AgentStatus = "active" | "idle" | "stopped" | "error";
+
+export type DeploymentStatus = "success" | "building" | "failed";
+
+export type Deployment = {
+  id: string;
+  environment: "production" | "preview";
+  url: string;
+  status: DeploymentStatus;
+  timestamp: string;
+};
+
+export type AgentActivityType = "task" | "system" | "error";
+
+export type AgentActivity = {
+  id: string;
+  type: AgentActivityType;
+  message: string;
+  timestamp: string;
+};
+
+export type AgentRunType = "subagent" | "exec" | "deploy";
+
+export type AgentRun = {
+  id: string;
+  type: AgentRunType;
+  model: string;
+  status: "running" | "success" | "failed";
+  startedAt: string;
+  shortLog: string; // The last ~40 lines or summary
+};
+
+export type AgentMetrics = {
+  tokensUsedDaily: number;
+  tokensUsedWeekly: number; // 7-day rolling
+  messagesCount: number;
+  toolCallsCount: number;
+  totalCost: number;
+  uptime: number; // in seconds
+  requestsProcessed: number;
+};
+
+export type AgentState = {
+  status: AgentStatus;
+  gatewayStatus: "ok" | "warn" | "down";
+  metrics: AgentMetrics;
+  lastDeploy: Deployment;
+  activeRuns: number; // Count of currently active jobs
+  recentRuns: AgentRun[];
+  lastActive: string;
+};
+
+export type ChatRole = "system" | "user" | "assistant";
+
+export type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  content: string;
+  model?: string;
+  createdAt: string;
+};
+
+export type ChatThread = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookEvent = {
+  id: string;
+  source: string;
+  type: string;
+  payload: unknown;
+  receivedAt: string;
+};
+
+export type UsageEvent = {
+  id: string;
+  kind: "chat" | "batch" | "tool";
+  tokens: number;
+  model?: string;
+  taskIds: string[];
+  tool?: string;
+  createdAt: string;
+};
+
+export type UsageAlert = {
+  id: string;
+  level: "warn" | "critical";
+  message: string;
+  createdAt: string;
+};
+
+export type RoutineCacheEntry = {
+  id: string;
+  key: string;
+  value: string;
+  ttlSeconds?: number;
+  createdAt: string;
+};
+
+export type LabQuestionType = "short" | "long" | "single" | "multi" | "scale" | "tinder";
+
+export type LabQuestion = {
+  id: string;
+  label: string;
+  type: LabQuestionType;
+  required: boolean;
+  helper?: string;
+  options?: string[];
+};
+
+export type LabAssetRequest = {
+  id: string;
+  label: string;
+  type: "image" | "icon" | "video" | "copy" | "data" | "other";
+  required?: boolean;
+  notes?: string;
+  uploadedFileName?: string;
+  uploadedAt?: string;
+};
+
+export type LabFramework = {
+  id: string;
+  title: string;
+  goal: string;
+  context: string;
+  screenType: string;
+  outputFormat: string;
+  outputLength: string;
+  aiTemplate: string;
+  questions: LabQuestion[];
+  assetRequests: LabAssetRequest[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LabAnswerValue = string | string[] | number;
+
+export type LabSession = {
+  id: string;
+  frameworkId: string;
+  title: string;
+  answers: Record<string, LabAnswerValue>;
+  notes: string;
+  createdAt: string;
+};
+
+export type LabResearchPrompt = {
+  id: string;
+  title: string;
+  objective: string;
+  outputFormat: string;
+  outputLength: string;
+  prompt: string;
+  response: string;
+  createdAt: string;
+};
+
 export type Database = {
   tasks: Task[];
   columns: Column[];
@@ -113,4 +279,13 @@ export type Database = {
   scripts: Script[];
   preferences: Preference[];
   experiments: Experiment[];
+  agent: AgentState;
+  chatThreads: ChatThread[];
+  webhookEvents: WebhookEvent[];
+  usageEvents: UsageEvent[];
+  usageAlerts: UsageAlert[];
+  routineCache: RoutineCacheEntry[];
+  labFrameworks: LabFramework[];
+  labSessions: LabSession[];
+  labResearchPrompts: LabResearchPrompt[];
 };

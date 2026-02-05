@@ -2,86 +2,54 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
-import { useAutoAnimate } from "@formkit/auto-animate/react";
-import Clock from "@/components/Clock";
-import ThemeToggle from "@/components/ThemeToggle";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import Sidebar from "@/components/dashboard/Sidebar";
+import OverviewGrid from "@/components/dashboard/overview/OverviewGrid";
+import TagManager from "@/components/dashboard/TagManager";
+import TagManagerModal from "@/components/dashboard/TagManagerModal";
+import BoardView from "@/components/dashboard/BoardView";
+import PlannerView from "@/components/dashboard/PlannerView";
+import PreferencesView from "@/components/dashboard/PreferencesView";
+import ExperimentsView from "@/components/dashboard/ExperimentsView";
+import LabsView from "@/components/dashboard/LabsView";
+import ScriptsView from "@/components/dashboard/ScriptsView";
+import IntegrationsView from "@/components/dashboard/IntegrationsView";
+import { OverviewSkeleton } from "@/components/ui/Skeletons";
+import { useToast } from "@/components/ui/ToastProvider";
+
 import type {
-  ChecklistItem,
   Column,
   Experiment,
   ExperimentResult,
   ExperimentStatus,
   Level,
-  LinkItem,
   Preference,
   PreferenceDecision,
   Priority,
   Script,
   Tag,
-  Task
+  Task,
+  AgentState
 } from "@/lib/types";
 
-const priorities: Priority[] = ["Low", "Medium", "High"];
-const levels: Level[] = ["Low", "Medium", "High"];
-const experimentStatuses: ExperimentStatus[] = [
-  "Idea",
-  "Queued",
-  "Running",
-  "Analyzing",
-  "Complete"
-];
-const experimentResults: ExperimentResult[] = [
-  "Pending",
-  "Positive",
-  "Negative",
-  "Inconclusive"
-];
 const levelWeight: Record<Level, number> = {
   Low: 1,
   Medium: 2,
   High: 3
 };
 
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit"
-});
+const priorityWeight: Record<Priority, number> = {
+  P0: 4,
+  P1: 3,
+  P2: 2,
+  P3: 1
+};
 
 const heroDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
   month: "long",
   day: "numeric"
 });
-
-const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "2-digit"
-});
-
-function formatTimestamp(value?: string) {
-  if (!value) return "--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return dateFormatter.format(parsed);
-}
-
-function formatShortDate(value?: string) {
-  if (!value) return "--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return shortDateFormatter.format(parsed);
-}
-
-function formatInputDate(value?: string) {
-  if (!value) return "";
-  if (value.length >= 10) return value.slice(0, 10);
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
-}
 
 function createClientId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -90,8 +58,12 @@ function createClientId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function getTagColor(tagId: string, tags: Tag[]) {
-  return tags.find((tag) => tag.id === tagId)?.color ?? "#94a3b8";
+function formatInputDate(value?: string) {
+  if (!value) return "";
+  if (value.length >= 10) return value.slice(0, 10);
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -151,18 +123,45 @@ type ExperimentDraft = {
 const SIGNAL_STORAGE_KEY = "jarvis_signals_v1";
 const TRACKING_STORAGE_KEY = "jarvis_tracking_enabled";
 const CAPACITY_STORAGE_KEY = "jarvis_capacity_hours";
+const VIEW_STORAGE_KEY = "jarvis_active_view_v1";
 const SIGNAL_TTL_MS = 1000 * 60 * 60 * 48;
 
 export default function SecondBrain() {
+  // State
   const [columns, setColumns] = useState<Column[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [scripts, setScripts] = useState<Script[]>([]);
+  const [agentState, setAgentState] = useState<AgentState | null>(null);
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<
-    "board" | "planner" | "preferences" | "experiments" | "scripts"
+    "board" | "planner" | "preferences" | "experiments" | "labs" | "scripts" | "integrations"
   >("board");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    if (
+      stored === "board" ||
+      stored === "planner" ||
+      stored === "preferences" ||
+      stored === "experiments" ||
+      stored === "labs"
+    ) {
+      setActiveView(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(VIEW_STORAGE_KEY, activeView);
+  }, [activeView]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeView]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({});
@@ -170,18 +169,17 @@ export default function SecondBrain() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const toast = useToast();
+  
+  // Tag Mgmt
   const [tagDraft, setTagDraft] = useState<TagDraft>({
     label: "",
     color: "#94a3b8"
   });
+
+  // Prefs
   const [preferences, setPreferences] = useState<Preference[]>([]);
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [trackingEnabled, setTrackingEnabled] = useState(true);
-  const [weeklyCapacity, setWeeklyCapacity] = useState(24);
-  const [planDrafts, setPlanDrafts] = useState<
-    Record<string, Partial<Task>>
-  >({});
   const [preferenceDraft, setPreferenceDraft] = useState<PreferenceDraft>({
     prompt: "",
     leftLabel: "No",
@@ -190,6 +188,10 @@ export default function SecondBrain() {
     notes: ""
   });
   const [preferenceConfidence, setPreferenceConfidence] = useState(3);
+  const preferenceCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Exps
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [experimentDraft, setExperimentDraft] = useState<ExperimentDraft>({
     title: "",
     hypothesis: "",
@@ -202,9 +204,9 @@ export default function SecondBrain() {
     tags: [],
     notes: ""
   });
-  const [editingExperimentId, setEditingExperimentId] = useState<string | null>(
-    null
-  );
+  const [editingExperimentId, setEditingExperimentId] = useState<string | null>(null);
+
+  // Scripts
   const [scriptDraft, setScriptDraft] = useState<ScriptDraft>({
     name: "",
     description: "",
@@ -214,13 +216,14 @@ export default function SecondBrain() {
   });
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
   const [copiedScriptId, setCopiedScriptId] = useState<string | null>(null);
-  const preferenceCardRef = useRef<HTMLDivElement | null>(null);
-  const [signalsRef] = useAutoAnimate<HTMLDivElement>();
-  const [experimentsRef] = useAutoAnimate<HTMLDivElement>();
-  const [scriptsRef] = useAutoAnimate<HTMLDivElement>();
 
-  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+  // Signals
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [trackingEnabled, setTrackingEnabled] = useState(true);
+  const [weeklyCapacity, setWeeklyCapacity] = useState(24);
+  const [planDrafts, setPlanDrafts] = useState<Record<string, Partial<Task>>>({});
 
+  // Helpers
   const persistSignals = (next: Signal[]) => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIGNAL_STORAGE_KEY, JSON.stringify(next));
@@ -241,25 +244,28 @@ export default function SecondBrain() {
     });
   };
 
-  const columnsSorted = useMemo(() => {
-    return [...columns].sort((a, b) => a.order - b.order);
-  }, [columns]);
+  const notifySuccess = (title: string, description?: string) => {
+    toast.success(title, description);
+  };
+
+  const notifyError = (title: string, description?: string) => {
+    toast.error(title, description);
+  };
+
+  // Derived
+  const columnsSorted = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns]);
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     const matchesQuery = (task: Task) => {
       if (!query) return true;
-      const haystack = `${task.title} ${task.description} ${task.notes}`
-        .toLowerCase()
-        .trim();
+      const haystack = `${task.title} ${task.description} ${task.notes}`.toLowerCase().trim();
       return haystack.includes(query);
     };
-
     const matchesTags = (task: Task) => {
       if (activeTags.length === 0) return true;
       return task.tags.some((tagId) => activeTags.includes(tagId));
     };
-
     return tasks
       .filter((task) => matchesQuery(task) && matchesTags(task))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -302,9 +308,10 @@ export default function SecondBrain() {
 
   const plannerTasks = useMemo(() => {
     const priorityWeight: Record<Priority, number> = {
-      Low: 1,
-      Medium: 2,
-      High: 3
+      P3: 1,
+      P2: 2,
+      P1: 3,
+      P0: 4
     };
     return [...openTasks].sort((a, b) => {
       const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
@@ -314,6 +321,7 @@ export default function SecondBrain() {
     });
   }, [openTasks]);
 
+  // Effects
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
@@ -325,14 +333,16 @@ export default function SecondBrain() {
           tagsData,
           scriptsData,
           preferencesData,
-          experimentsData
+          experimentsData,
+          agentData
         ] = await Promise.all([
           fetchJson<Column[]>("/api/columns"),
           fetchJson<Task[]>("/api/tasks"),
           fetchJson<Tag[]>("/api/tags"),
           fetchJson<Script[]>("/api/scripts"),
           fetchJson<Preference[]>("/api/preferences"),
-          fetchJson<Experiment[]>("/api/experiments")
+          fetchJson<Experiment[]>("/api/experiments"),
+          fetchJson<AgentState>("/api/agent/data")
         ]);
         setColumns(columnsData);
         setTasks(tasksData);
@@ -340,13 +350,14 @@ export default function SecondBrain() {
         setScripts(scriptsData);
         setPreferences(preferencesData);
         setExperiments(experimentsData);
+        setAgentState(agentData);
       } catch (err) {
         setError("Unable to load data. Please refresh the page.");
+        notifyError("Unable to load data", "Please refresh the page.");
       } finally {
         setLoading(false);
       }
     };
-
     loadAll();
   }, []);
 
@@ -379,10 +390,7 @@ export default function SecondBrain() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(
-      TRACKING_STORAGE_KEY,
-      trackingEnabled ? "on" : "off"
-    );
+    window.localStorage.setItem(TRACKING_STORAGE_KEY, trackingEnabled ? "on" : "off");
   }, [trackingEnabled]);
 
   useEffect(() => {
@@ -390,34 +398,23 @@ export default function SecondBrain() {
     window.localStorage.setItem(CAPACITY_STORAGE_KEY, `${weeklyCapacity}`);
   }, [weeklyCapacity]);
 
+  // Actions
   const updateTask = async (taskId: string, patch: Partial<Task>) => {
+    const previous = tasks;
     setTasks((prev) =>
       prev.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              ...patch,
-              updatedAt: new Date().toISOString()
-            }
-          : task
+        task.id === taskId ? { ...task, ...patch, updatedAt: new Date().toISOString() } : task
       )
     );
-
     try {
-      const response = await fetch(`/api/tasks/${taskId}`.trim(), {
+      await fetch(`/api/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch)
       });
-      if (!response.ok) {
-        throw new Error("Failed to update task");
-      }
-      const updated = (await response.json()) as Task;
-      setTasks((prev) =>
-        prev.map((task) => (task.id === taskId ? updated : task))
-      );
     } catch (err) {
-      setError("Task update failed. Please retry.");
+      setTasks(previous);
+      notifyError("Task update failed", "Reverted to the last saved state.");
     }
   };
 
@@ -425,74 +422,177 @@ export default function SecondBrain() {
     const title = newTaskTitles[columnId]?.trim();
     if (!title) return;
 
+    const tempId = `temp_${createClientId()}`;
+    const now = new Date().toISOString();
+    const tempTask: Task = {
+      id: tempId,
+      title,
+      columnId,
+      priority: "P2",
+      tags: [],
+      description: "",
+      nextAction: "",
+      notes: "",
+      sensitiveNotes: "",
+      privateNumbers: undefined,
+      checklist: [],
+      definitionOfDone: [],
+      links: [],
+      estimateHours: undefined,
+      dueDate: undefined,
+      dependencies: [],
+      impact: "Medium",
+      effort: "Medium",
+      confidence: 3,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    setTasks((prev) => [...prev, tempTask]);
+    setNewTaskTitles((prev) => ({ ...prev, [columnId]: "" }));
+
     try {
       const response = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, columnId })
       });
-      if (!response.ok) {
-        throw new Error("Failed to create task");
-      }
+      if (!response.ok) throw new Error("Failed");
       const created = (await response.json()) as Task;
-      setTasks((prev) => [...prev, created]);
-      setNewTaskTitles((prev) => ({ ...prev, [columnId]: "" }));
+      setTasks((prev) => prev.map((task) => (task.id === tempId ? created : task)));
       logSignal("task_created", `Task created: ${created.title}`);
+      notifySuccess("Task created", created.title);
     } catch (err) {
-      setError("Task creation failed. Please retry.");
-    }
-  };
-
-  const deleteTask = async (taskId: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
-    if (selectedTaskId === taskId) {
-      setSelectedTaskId(null);
-    }
-
-    try {
-      await fetch(`/api/tasks/${taskId}`.trim(), { method: "DELETE" });
-      logSignal("task_deleted", `Task deleted: ${taskId}`);
-    } catch (err) {
-      setError("Task deletion failed. Please retry.");
+      setTasks((prev) => prev.filter((task) => task.id !== tempId));
+      setNewTaskTitles((prev) => ({ ...prev, [columnId]: title }));
+      notifyError("Task creation failed", "Your draft is still in the input.");
     }
   };
 
   const toggleTagFilter = (tagId: string) => {
     setActiveTags((prev) =>
-      prev.includes(tagId)
-        ? prev.filter((id) => id !== tagId)
-        : [...prev, tagId]
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
     );
   };
 
-  const createTag = async () => {
+  const hasSubtasks = (task: Task) => {
+    const dodCount = task.definitionOfDone?.length ?? 0;
+    const checklistCount = task.checklist?.length ?? 0;
+    return dodCount + checklistCount > 0;
+  };
+
+  const isBatchEligible = (task: Task) => {
+    const lowPriority = task.priority === "P2" || task.priority === "P3";
+    return !!task.swarmRequired && lowPriority && hasSubtasks(task);
+  };
+
+  const queueBatchForTask = async (task: Task) => {
+    try {
+      const response = await fetch("/api/agent/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: task.id })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Batch request failed");
+      }
+      await updateTask(task.id, { batchJobId: payload.batchId, processingMode: "batch" });
+      notifySuccess("Batch queued", `Batch ID: ${payload.batchId}`);
+    } catch (err) {
+      notifyError("Batch queue failed", "Reverting to realtime processing.");
+      await updateTask(task.id, { processingMode: "realtime" });
+    }
+  };
+
+  const setTaskSwarmRequired = async (taskId: string, value: boolean) => {
+    await updateTask(taskId, { swarmRequired: value });
+  };
+
+  const setTaskProcessingMode = async (taskId: string, mode: "realtime" | "batch") => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    if (mode === "batch") {
+      if (!isBatchEligible({ ...task, swarmRequired: task.swarmRequired })) {
+        notifyError("Batch not eligible", "Needs subtasks, low priority, and swarm enabled.");
+        return;
+      }
+      await updateTask(taskId, { processingMode: "batch" });
+      await queueBatchForTask({ ...task, processingMode: "batch" });
+      return;
+    }
+    await updateTask(taskId, { processingMode: "realtime", batchJobId: undefined });
+  };
+
+  const resetTagDraft = () => {
+    setTagDraft({ label: "", color: "#94a3b8" });
+    setEditingTagId(null);
+  };
+
+  const submitTag = async () => {
     const label = tagDraft.label.trim();
     if (!label) return;
+
+    if (editingTagId) {
+      const previous = tags;
+      const patch = { label, color: tagDraft.color };
+      setTags((prev) =>
+        prev.map((tag) => (tag.id === editingTagId ? { ...tag, ...patch } : tag))
+      );
+      try {
+        const response = await fetch(`/api/tags/${editingTagId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch)
+        });
+        const updated = await response.json();
+        setTags((prev) => prev.map((tag) => (tag.id === updated.id ? updated : tag)));
+        notifySuccess("Tag updated", updated.label);
+        resetTagDraft();
+      } catch (err) {
+        setTags(previous);
+        notifyError("Tag update failed", "Reverted to last saved state.");
+      }
+      return;
+    }
+
+    const tempId = `temp_${createClientId()}`;
+    const tempTag: Tag = { id: tempId, label, color: tagDraft.color };
+    setTags((prev) => [...prev, tempTag]);
+    resetTagDraft();
 
     try {
       const response = await fetch("/api/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, color: tagDraft.color })
+        body: JSON.stringify(tempTag)
       });
-      if (!response.ok) {
-        throw new Error("Failed to create tag");
-      }
-      const created = (await response.json()) as Tag;
-      setTags((prev) => [...prev, created]);
-      setTagDraft({ label: "", color: "#94a3b8" });
-      logSignal("tag_created", `Tag created: ${created.label}`);
+      const created = await response.json();
+      setTags((prev) => prev.map((tag) => (tag.id === tempId ? created : tag)));
+      notifySuccess("Tag created", created.label);
     } catch (err) {
-      setError("Tag creation failed. Please retry.");
+      setTags((prev) => prev.filter((tag) => tag.id !== tempId));
+      notifyError("Tag creation failed", "Try again when you're back online.");
     }
   };
 
+  const deleteTag = async (tagId: string) => {
+    const previous = tags;
+    setTags((prev) => prev.filter((tag) => tag.id !== tagId));
+    try {
+      await fetch(`/api/tags/${tagId}`, { method: "DELETE" });
+      notifySuccess("Tag deleted");
+    } catch (err) {
+      setTags(previous);
+      notifyError("Tag deletion failed", "Reverted the tag.");
+    }
+  };
+
+  // Script Actions
   const toggleScriptTag = (tagId: string) => {
     setScriptDraft((prev) => ({
       ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter((id) => id !== tagId)
-        : [...prev.tags, tagId]
+      tags: prev.tags.includes(tagId) ? prev.tags.filter((id) => id !== tagId) : [...prev.tags, tagId]
     }));
   };
 
@@ -504,48 +604,63 @@ export default function SecondBrain() {
       tags: scriptDraft.tags,
       favorite: scriptDraft.favorite
     };
-
     if (!payload.name || !payload.command) return;
 
     try {
       if (editingScriptId) {
-        const response = await fetch(`/api/scripts/${editingScriptId}`.trim(), {
+        setScripts((prev) =>
+          prev.map((script) =>
+            script.id === editingScriptId ? { ...script, ...payload } : script
+          )
+        );
+        const response = await fetch(`/api/scripts/${editingScriptId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        if (!response.ok) {
-          throw new Error("Failed to update script");
-        }
-        const updated = (await response.json()) as Script;
-        setScripts((prev) =>
-          prev.map((script) => (script.id === updated.id ? updated : script))
-        );
+        const updated = await response.json();
+        setScripts((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
         logSignal("script_updated", `Script updated: ${updated.name}`);
+        notifySuccess("Script updated", updated.name);
       } else {
+        const tempId = `temp_${createClientId()}`;
+        const now = new Date().toISOString();
+        const tempScript: Script = {
+          id: tempId,
+          name: payload.name,
+          description: payload.description,
+          command: payload.command,
+          tags: payload.tags,
+          favorite: payload.favorite,
+          createdAt: now,
+          updatedAt: now
+        };
+        setScripts((prev) => [...prev, tempScript]);
         const response = await fetch("/api/scripts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        if (!response.ok) {
-          throw new Error("Failed to create script");
-        }
-        const created = (await response.json()) as Script;
-        setScripts((prev) => [...prev, created]);
+        const created = await response.json();
+        setScripts((prev) => prev.map((s) => (s.id === tempId ? created : s)));
         logSignal("script_created", `Script created: ${created.name}`);
+        notifySuccess("Script created", created.name);
       }
-
-      setScriptDraft({
-        name: "",
-        description: "",
-        command: "",
-        tags: [],
-        favorite: false
-      });
+      setScriptDraft({ name: "", description: "", command: "", tags: [], favorite: false });
       setEditingScriptId(null);
     } catch (err) {
-      setError("Script save failed. Please retry.");
+      notifyError("Script save failed", "Changes were not saved.");
+      if (editingScriptId) {
+        try {
+          const response = await fetch("/api/scripts");
+          const refreshed = await response.json();
+          setScripts(refreshed);
+        } catch {
+          // ignore secondary failure
+        }
+      } else {
+        setScripts((prev) => prev.filter((script) => !script.id.startsWith("temp_")));
+      }
     }
   };
 
@@ -562,40 +677,40 @@ export default function SecondBrain() {
 
   const cancelEditScript = () => {
     setEditingScriptId(null);
-    setScriptDraft({
-      name: "",
-      description: "",
-      command: "",
-      tags: [],
-      favorite: false
-    });
+    setScriptDraft({ name: "", description: "", command: "", tags: [], favorite: false });
   };
 
   const toggleFavoriteScript = async (script: Script) => {
+    const previous = scripts;
+    setScripts((prev) =>
+      prev.map((item) =>
+        item.id === script.id ? { ...item, favorite: !script.favorite } : item
+      )
+    );
     try {
-      const response = await fetch(`/api/scripts/${script.id}`.trim(), {
+      const response = await fetch(`/api/scripts/${script.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ favorite: !script.favorite })
       });
-      if (!response.ok) {
-        throw new Error("Failed to update script");
-      }
-      const updated = (await response.json()) as Script;
-      setScripts((prev) =>
-        prev.map((item) => (item.id === updated.id ? updated : item))
-      );
+      const updated = await response.json();
+      setScripts((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      notifySuccess(script.favorite ? "Removed favorite" : "Marked as favorite", updated.name);
     } catch (err) {
-      setError("Script update failed. Please retry.");
+      setScripts(previous);
+      notifyError("Script update failed", "Reverted favorite state.");
     }
   };
 
   const deleteScript = async (scriptId: string) => {
-    setScripts((prev) => prev.filter((script) => script.id !== scriptId));
+    const previous = scripts;
+    setScripts((prev) => prev.filter((s) => s.id !== scriptId));
     try {
-      await fetch(`/api/scripts/${scriptId}`.trim(), { method: "DELETE" });
+      await fetch(`/api/scripts/${scriptId}`, { method: "DELETE" });
+      notifySuccess("Script deleted");
     } catch (err) {
-      setError("Script deletion failed. Please retry.");
+      setScripts(previous);
+      notifyError("Script deletion failed", "Reverted the script.");
     }
   };
 
@@ -603,19 +718,19 @@ export default function SecondBrain() {
     try {
       await navigator.clipboard.writeText(script.command);
       setCopiedScriptId(script.id);
-      window.setTimeout(() => setCopiedScriptId(null), 1400);
+      setTimeout(() => setCopiedScriptId(null), 1400);
       logSignal("script_copied", `Script copied: ${script.name}`);
+      toast.info("Copied to clipboard", script.name);
     } catch (err) {
-      setError("Clipboard copy failed. Please retry.");
+      notifyError("Copy failed", "Clipboard permission denied.");
     }
   };
 
+  // Pref Actions
   const togglePreferenceTag = (tagId: string) => {
     setPreferenceDraft((prev) => ({
       ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter((id) => id !== tagId)
-        : [...prev.tags, tagId]
+      tags: prev.tags.includes(tagId) ? prev.tags.filter((id) => id !== tagId) : [...prev.tags, tagId]
     }));
   };
 
@@ -627,125 +742,116 @@ export default function SecondBrain() {
       tags: preferenceDraft.tags,
       notes: preferenceDraft.notes.trim()
     };
-
     if (!payload.prompt) return;
 
     try {
+      const tempId = `temp_${createClientId()}`;
+      const now = new Date().toISOString();
+      const tempPreference: Preference = {
+        id: tempId,
+        prompt: payload.prompt,
+        leftLabel: payload.leftLabel || "No",
+        rightLabel: payload.rightLabel || "Yes",
+        tags: payload.tags,
+        decision: "unset",
+        confidence: preferenceConfidence,
+        notes: payload.notes,
+        createdAt: now,
+        updatedAt: now
+      };
+      setPreferences((prev) => [...prev, tempPreference]);
       const response = await fetch("/api/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      if (!response.ok) {
-        throw new Error("Failed to create preference");
-      }
-      const created = (await response.json()) as Preference;
-      setPreferences((prev) => [...prev, created]);
-      setPreferenceDraft({
-        prompt: "",
-        leftLabel: "No",
-        rightLabel: "Yes",
-        tags: [],
-        notes: ""
-      });
+      const created = await response.json();
+      setPreferences((prev) => prev.map((pref) => (pref.id === tempId ? created : pref)));
+      setPreferenceDraft({ prompt: "", leftLabel: "No", rightLabel: "Yes", tags: [], notes: "" });
       logSignal("preference_created", `Preference added: ${created.prompt}`);
+      notifySuccess("Preference created", created.prompt);
     } catch (err) {
-      setError("Preference save failed. Please retry.");
+      setPreferences((prev) => prev.filter((pref) => !pref.id.startsWith("temp_")));
+      notifyError("Preference save failed", "Please try again.");
     }
   };
 
-  const updatePreference = async (
-    preferenceId: string,
-    patch: Partial<Preference>
-  ) => {
+  const updatePreference = async (preferenceId: string, patch: Partial<Preference>) => {
+    const previous = preferences;
     setPreferences((prev) =>
       prev.map((item) =>
-        item.id === preferenceId
-          ? {
-              ...item,
-              ...patch,
-              updatedAt: new Date().toISOString()
-            }
-          : item
+        item.id === preferenceId ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
       )
     );
-
     try {
-      const response = await fetch(`/api/preferences/${preferenceId}`.trim(), {
+      await fetch(`/api/preferences/${preferenceId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch)
       });
-      if (!response.ok) {
-        throw new Error("Failed to update preference");
-      }
-      const updated = (await response.json()) as Preference;
-      setPreferences((prev) =>
-        prev.map((item) => (item.id === preferenceId ? updated : item))
-      );
     } catch (err) {
-      setError("Preference update failed. Please retry.");
+      setPreferences(previous);
+      notifyError("Preference update failed", "Reverted to previous state.");
     }
   };
 
   const deletePreference = async (preferenceId: string) => {
+    const previous = preferences;
     setPreferences((prev) => prev.filter((item) => item.id !== preferenceId));
     try {
-      await fetch(`/api/preferences/${preferenceId}`.trim(), {
-        method: "DELETE"
-      });
+      await fetch(`/api/preferences/${preferenceId}`, { method: "DELETE" });
       logSignal("preference_deleted", `Preference removed`);
+      notifySuccess("Preference deleted");
     } catch (err) {
-      setError("Preference deletion failed. Please retry.");
+      setPreferences(previous);
+      notifyError("Preference deletion failed", "Reverted the card.");
     }
   };
 
   const animatePreferenceCard = async (direction: PreferenceDecision) => {
     if (!preferenceCardRef.current) return;
     try {
-      const anime = (await import("animejs")).default;
-      const xOffset =
-        direction === "left" ? -220 : direction === "right" ? 220 : 0;
-      await anime({
-        targets: preferenceCardRef.current,
-        translateX: xOffset,
-        rotate: xOffset === 0 ? 0 : xOffset > 0 ? 6 : -6,
-        opacity: 0,
-        duration: 240,
-        easing: "easeInOutQuad"
-      }).finished;
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        return;
+      }
+      const xOffset = direction === "left" ? -220 : direction === "right" ? 220 : 0;
+      if (xOffset === 0) return;
+      const card = preferenceCardRef.current;
+      card.style.willChange = "transform, opacity";
+      const animation = card.animate(
+        [
+          { transform: "translateX(0px) rotate(0deg)", opacity: 1 },
+          { transform: `translateX(${xOffset}px) rotate(${xOffset > 0 ? 6 : -6}deg)`, opacity: 0 }
+        ],
+        { duration: 220, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+      );
+      await animation.finished;
     } catch (err) {
-      // no-op for animation failure
+      // ignore
     } finally {
       if (preferenceCardRef.current) {
         preferenceCardRef.current.style.transform = "";
         preferenceCardRef.current.style.opacity = "1";
+        preferenceCardRef.current.style.willChange = "";
       }
     }
   };
 
-  const handlePreferenceDecision = async (
-    preference: Preference,
-    decision: PreferenceDecision
-  ) => {
+  const handlePreferenceDecision = async (preference: Preference, decision: PreferenceDecision) => {
     await animatePreferenceCard(decision);
-    updatePreference(preference.id, {
-      decision,
-      confidence: preferenceConfidence
-    });
-    logSignal(
-      "preference_scored",
-      `Preference ${decision}: ${preference.prompt}`
-    );
+    updatePreference(preference.id, { decision, confidence: preferenceConfidence });
+    logSignal("preference_scored", `Preference ${decision}: ${preference.prompt}`);
     setPreferenceConfidence(3);
   };
 
+  // Exp Actions
   const toggleExperimentTag = (tagId: string) => {
     setExperimentDraft((prev) => ({
       ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter((id) => id !== tagId)
-        : [...prev.tags, tagId]
+      tags: prev.tags.includes(tagId) ? prev.tags.filter((id) => id !== tagId) : [...prev.tags, tagId]
     }));
   };
 
@@ -762,41 +868,54 @@ export default function SecondBrain() {
       tags: experimentDraft.tags,
       notes: experimentDraft.notes.trim()
     };
-
     if (!payload.title) return;
 
+    const previousExperiments = experiments;
     try {
       if (editingExperimentId) {
-        const response = await fetch(
-          `/api/experiments/${editingExperimentId}`.trim(),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          }
-        );
-        if (!response.ok) {
-          throw new Error("Failed to update experiment");
-        }
-        const updated = (await response.json()) as Experiment;
         setExperiments((prev) =>
-          prev.map((item) => (item.id === updated.id ? updated : item))
+          prev.map((exp) =>
+            exp.id === editingExperimentId ? { ...exp, ...payload } : exp
+          )
         );
+        const response = await fetch(`/api/experiments/${editingExperimentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const updated = await response.json();
+        setExperiments((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
         logSignal("experiment_updated", `Experiment updated: ${updated.title}`);
+        notifySuccess("Experiment updated", updated.title);
       } else {
+        const tempId = `temp_${createClientId()}`;
+        const now = new Date().toISOString();
+        const tempExperiment: Experiment = {
+          id: tempId,
+          title: payload.title,
+          hypothesis: payload.hypothesis,
+          metric: payload.metric,
+          status: payload.status,
+          result: payload.result,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          owner: payload.owner,
+          notes: payload.notes,
+          tags: payload.tags,
+          createdAt: now,
+          updatedAt: now
+        };
+        setExperiments((prev) => [...prev, tempExperiment]);
         const response = await fetch("/api/experiments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        if (!response.ok) {
-          throw new Error("Failed to create experiment");
-        }
-        const created = (await response.json()) as Experiment;
-        setExperiments((prev) => [...prev, created]);
+        const created = await response.json();
+        setExperiments((prev) => prev.map((exp) => (exp.id === tempId ? created : exp)));
         logSignal("experiment_created", `Experiment created: ${created.title}`);
+        notifySuccess("Experiment created", created.title);
       }
-
       setExperimentDraft({
         title: "",
         hypothesis: "",
@@ -811,7 +930,8 @@ export default function SecondBrain() {
       });
       setEditingExperimentId(null);
     } catch (err) {
-      setError("Experiment save failed. Please retry.");
+      setExperiments(previousExperiments);
+      notifyError("Experiment save failed", "Please try again.");
     }
   };
 
@@ -848,22 +968,19 @@ export default function SecondBrain() {
   };
 
   const deleteExperiment = async (experimentId: string) => {
+    const previous = experiments;
     setExperiments((prev) => prev.filter((item) => item.id !== experimentId));
     try {
-      await fetch(`/api/experiments/${experimentId}`.trim(), {
-        method: "DELETE"
-      });
+      await fetch(`/api/experiments/${experimentId}`, { method: "DELETE" });
       logSignal("experiment_deleted", `Experiment deleted`);
+      notifySuccess("Experiment deleted");
     } catch (err) {
-      setError("Experiment deletion failed. Please retry.");
+      setExperiments(previous);
+      notifyError("Experiment deletion failed", "Reverted the card.");
     }
   };
 
-  const isDefinitionDone = (task: Task) => {
-    if (!task.definitionOfDone || task.definitionOfDone.length === 0) return true;
-    return task.definitionOfDone.every((item) => item.done);
-  };
-
+  // Drag & Drop
   const moveTask = (taskId: string, columnId: string) => {
     updateTask(taskId, { columnId });
     const task = tasks.find((item) => item.id === taskId);
@@ -873,10 +990,7 @@ export default function SecondBrain() {
     }
   };
 
-  const handleDragStart = (
-    event: DragEvent<HTMLButtonElement>,
-    taskId: string
-  ) => {
+  const handleDragStart = (event: DragEvent<HTMLButtonElement>, taskId: string) => {
     event.dataTransfer.setData("text/plain", taskId);
     event.dataTransfer.effectAllowed = "move";
   };
@@ -890,17 +1004,17 @@ export default function SecondBrain() {
     const task = tasks.find((item) => item.id === taskId);
     if (!task || task.columnId === column.id) return;
 
-    if (column.key === "done" && !isDefinitionDone(task)) {
-      setPendingMove({ taskId, columnId: column.id });
-      return;
+    if (column.key === "done" && task.definitionOfDone && task.definitionOfDone.length > 0) {
+      // Simple validation for now
+      if (!task.definitionOfDone.every(i => i.done)) {
+        setPendingMove({ taskId, columnId: column.id });
+        return; 
+      }
     }
-
     moveTask(taskId, column.id);
   };
 
-  const taskCount = tasks.length;
-  const heroDate = heroDateFormatter.format(new Date());
-
+  // Planner
   const plannedHours = useMemo(() => {
     return openTasks.reduce((total, task) => {
       const value = task.estimateHours ?? 0;
@@ -916,13 +1030,12 @@ export default function SecondBrain() {
   const focusQueue = useMemo(() => {
     const now = Date.now();
     const scored = openTasks.map((task) => {
-      const priorityScore = levelWeight[task.priority];
+      const priorityScore = priorityWeight[task.priority];
       const impactScore = task.impact ? levelWeight[task.impact] : 2;
       const effortPenalty = task.effort ? levelWeight[task.effort] - 1 : 0;
       let dueScore = 0;
       if (task.dueDate) {
-        const diffDays =
-          (new Date(task.dueDate).getTime() - now) / (1000 * 60 * 60 * 24);
+        const diffDays = (new Date(task.dueDate).getTime() - now) / (1000 * 60 * 60 * 24);
         if (diffDays <= 3) dueScore = 3;
         else if (diffDays <= 7) dueScore = 2;
         else if (diffDays <= 14) dueScore = 1;
@@ -930,11 +1043,7 @@ export default function SecondBrain() {
       const score = priorityScore + impactScore + dueScore - effortPenalty;
       return { task, score };
     });
-
-    return scored
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map((item) => item.task);
+    return scored.sort((a, b) => b.score - a.score).slice(0, 6).map((item) => item.task);
   }, [openTasks]);
 
   const doneTaskIds = useMemo(() => {
@@ -955,10 +1064,7 @@ export default function SecondBrain() {
     });
   }, [openTasks, doneTaskIds]);
 
-  const preferenceQueue = useMemo(() => {
-    return preferences.filter((pref) => pref.decision === "unset");
-  }, [preferences]);
-
+  const preferenceQueue = useMemo(() => preferences.filter((pref) => pref.decision === "unset"), [preferences]);
   const preferenceStats = useMemo(() => {
     return preferences.reduce(
       (acc, pref) => {
@@ -972,23 +1078,8 @@ export default function SecondBrain() {
     );
   }, [preferences]);
 
-  const openSection = (
-    view: "board" | "planner" | "preferences" | "experiments" | "scripts",
-    sectionId: string
-  ) => {
-    setActiveView(view);
-    if (typeof window === "undefined") return;
-    window.setTimeout(() => scrollToSection(sectionId), 60);
-  };
-
   const updatePlanDraft = (taskId: string, patch: Partial<Task>) => {
-    setPlanDrafts((prev) => ({
-      ...prev,
-      [taskId]: {
-        ...prev[taskId],
-        ...patch
-      }
-    }));
+    setPlanDrafts((prev) => ({ ...prev, [taskId]: { ...prev[taskId], ...patch } }));
   };
 
   const commitPlanDraft = (taskId: string) => {
@@ -1001,2021 +1092,201 @@ export default function SecondBrain() {
       return next;
     });
     const task = tasks.find((item) => item.id === taskId);
-    if (task) {
-      logSignal("plan_updated", `Plan updated: ${task.title}`);
-    }
+    if (task) logSignal("plan_updated", `Plan updated: ${task.title}`);
   };
 
-  const getPlanValue = <T extends keyof Task>(
-    task: Task,
-    key: T
-  ): Task[T] => {
+  const getPlanValue = (task: Task, key: keyof Task) => {
     const draft = planDrafts[task.id];
-    if (draft && key in draft) {
-      return draft[key] as Task[T];
-    }
+    if (draft && key in draft) return draft[key];
     return task[key];
   };
 
   const scrollToSection = (sectionId: string) => {
-    if (typeof document === "undefined") return;
     const target = document.getElementById(sectionId);
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
+  const openSection = (view: typeof activeView, sectionId?: string) => {
+    setActiveView(view);
+    if (sectionId) {
+      setTimeout(() => scrollToSection(sectionId), 60);
+    }
+  };
+
   return (
-    <main className="dashboard">
-      <header className="dashboard-topbar">
-        <div className="topbar-inner">
-          <div className="brand-block">
-            <div className="brand-mark" aria-hidden="true">
-              <span>J</span>
-            </div>
-            <div className="brand-copy">
-              <div className="brand-title">Jarvis Dashboard</div>
-              <div className="brand-subtitle">Second Brain · Workbench</div>
-            </div>
-          </div>
-
-          <div className="topbar-tabs">
-            <div className="view-switch" role="tablist" aria-label="Views">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeView === "board"}
-              className={`view-button ${activeView === "board" ? "active" : ""}`}
-              onClick={() => setActiveView("board")}
-            >
-              Board
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeView === "planner"}
-              className={`view-button ${
-                activeView === "planner" ? "active" : ""
-              }`}
-              onClick={() => setActiveView("planner")}
-            >
-              Planner
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeView === "preferences"}
-              className={`view-button ${
-                activeView === "preferences" ? "active" : ""
-              }`}
-              onClick={() => setActiveView("preferences")}
-            >
-              Preferences
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeView === "experiments"}
-              className={`view-button ${
-                activeView === "experiments" ? "active" : ""
-              }`}
-              onClick={() => setActiveView("experiments")}
-            >
-              Experiments
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeView === "scripts"}
-              className={`view-button ${activeView === "scripts" ? "active" : ""}`}
-              onClick={() => setActiveView("scripts")}
-            >
-              Scripts
-            </button>
-            </div>
-          </div>
-
-          <div className="topbar-actions">
-            <div className="topbar-search">
-              <label className="sr-only" htmlFor="task-search">
-                Search tasks
-              </label>
-              <input
-                id="task-search"
-                type="search"
-                placeholder="Search tasks, notes, tags…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <kbd aria-hidden="true">/</kbd>
-            </div>
-            <div className="topbar-stats">
-              <div>
-                <span>Total</span>
-                <strong>{taskCount}</strong>
-              </div>
-              <div>
-                <span>Open</span>
-                <strong>{openTaskCount}</strong>
-              </div>
-              <div>
-                <span>Done</span>
-                <strong>{doneCount}</strong>
-              </div>
-            </div>
-            <ThemeToggle />
-            <div className="topbar-time" title="Local time">
-              <Clock />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <section className="dashboard-hero reveal">
-        <div className="hero-copy">
-          <p className="hero-date">{heroDate}</p>
-          <h1>Today’s focus.</h1>
-          <p>
-            You have <strong>{openTaskCount}</strong> open tasks across{" "}
-            <strong>{columns.length}</strong> lanes.
-          </p>
-        </div>
-        <div className="hero-actions">
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => scrollToSection("tag-panel")}
-          >
-            Filter
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => openSection("board", "board-section")}
-          >
-            New Task
-          </button>
-        </div>
-      </section>
-
-      <section className="insight-card reveal">
-        <div className="insight-header">
-          <div>
-            <p className="section-eyebrow">Activity Pulse</p>
-            <h2>Team Velocity</h2>
-          </div>
-          <div className="insight-kpi">
-            <strong>+12%</strong>
-            <span>vs last week</span>
-          </div>
-        </div>
-        <div className="insight-chart">
-          <div className="chart-grid" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <svg viewBox="0 0 1000 200" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#2513ec" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#2513ec" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0 150 C 150 150, 150 50, 300 50 C 450 50, 450 120, 600 120 C 750 120, 750 30, 900 30 L 1000 30 L 1000 200 L 0 200 Z"
-              fill="url(#chartGradient)"
+    <div className="mx-auto flex w-full max-w-[1600px] gap-6 px-4 pb-24 pt-4 lg:pb-6 lg:pt-6">
+      <Sidebar activeView={activeView} setActiveView={setActiveView} />
+      <main className="min-w-0 flex-1">
+        {activeView === "board" && (
+          <>
+            <DashboardHeader
+              search={search}
+              setSearch={setSearch}
+              taskCount={tasks.length}
+              openTaskCount={openTaskCount}
+              doneCount={doneCount}
             />
-            <path
-              d="M0 150 C 150 150, 150 50, 300 50 C 450 50, 450 120, 600 120 C 750 120, 750 30, 900 30 L 1000 30"
-              fill="none"
-              stroke="#2513ec"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <circle cx="300" cy="50" r="5" fill="#ffffff" stroke="#2513ec" strokeWidth="3" />
-            <circle cx="600" cy="120" r="5" fill="#ffffff" stroke="#2513ec" strokeWidth="3" />
-            <circle cx="900" cy="30" r="7" fill="#2513ec" stroke="#ffffff" strokeWidth="3" />
-          </svg>
-        </div>
-        <div className="insight-metrics">
-          <div>
-            <span>Total tasks</span>
-            <strong>{taskCount}</strong>
-          </div>
-          <div>
-            <span>Open tasks</span>
-            <strong>{openTaskCount}</strong>
-          </div>
-          <div>
-            <span>Done tasks</span>
-            <strong>{doneCount}</strong>
-          </div>
-        </div>
-      </section>
 
-      <section id="tag-panel" className="filters-panel reveal">
-        <div className="tag-filters">
-          <div className="tag-filter-header">
-            <div>
-              <p className="section-eyebrow">Filters</p>
-              <h3>Tag focus</h3>
-            </div>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() => setShowTagManager(true)}
-            >
-              Manage tags
-            </button>
-          </div>
-          <div className="tag-filter-list">
-            {tags.length === 0 ? (
-              <div className="empty-note">No tags yet.</div>
+            {loading ? (
+              <OverviewSkeleton />
             ) : (
-              tags.map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  className={`tag-pill ${
-                    activeTags.includes(tag.id) ? "active" : ""
-                  }`}
-                  style={{ background: tag.color }}
-                  onClick={() => toggleTagFilter(tag.id)}
-                >
-                  {tag.label}
-                </button>
-              ))
+              agentState && (
+                <OverviewGrid
+                  agentState={agentState}
+                  heroDate={heroDateFormatter.format(new Date())}
+                />
+              )
             )}
-          </div>
-        </div>
-      </section>
+          </>
+        )}
 
-      {error ? <div className="alert">{error}</div> : null}
-
-      {activeView === "board" ? (
-      <section id="board-section" className="board-shell reveal">
-        <div className="section-header">
-          <div>
-            <p className="section-eyebrow">Task Board</p>
-            <h2>Prioritized Flow</h2>
-          </div>
-          <div className="section-actions">
-            <div className="pill">Drag & drop</div>
-            <div className="pill ghost">Quality gate: Done</div>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="loading">Loading board...</div>
-        ) : (
-          <div className="board">
-            {columnsSorted.map((column) => {
-              const columnTasks = tasksByColumn[column.id] ?? [];
-              return (
-                <div
-                  key={column.id}
-                  className={`column ${
-                    dragOverColumnId === column.id ? "drag-over" : ""
-                  }`}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragOverColumnId(column.id);
-                  }}
-                  onDragLeave={() => setDragOverColumnId(null)}
-                  onDrop={(event) => handleDrop(event, column)}
-                >
-                  <div className="column-header">
-                    <div>
-                      <h3>{column.title}</h3>
-                      <span>{columnTasks.length} cards</span>
-                    </div>
-                  </div>
-
-                  <div className="column-body">
-                    {columnTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        className="task-card"
-                        draggable
-                        onDragStart={(event) => handleDragStart(event, task.id)}
-                        onClick={() => setSelectedTaskId(task.id)}
-                      >
-                        <div className="task-title">{task.title}</div>
-                        <div className="task-tags">
-                          {task.tags.length === 0 ? (
-                            <span className="muted">No tags</span>
-                          ) : (
-                            task.tags.map((tagId) => {
-                              const tag = tags.find((item) => item.id === tagId);
-                              return (
-                                <span
-                                  key={tagId}
-                                  className="tag-label"
-                                  style={{ background: getTagColor(tagId, tags) }}
-                                >
-                                  {tag?.label ?? "Tag"}
-                                </span>
-                              );
-                            })
-                          )}
-                        </div>
-                        <div className="task-meta">
-                          <span className={`priority ${task.priority}`}>
-                            {task.priority}
-                          </span>
-                          <span>
-                            Created {formatTimestamp(task.createdAt)}
-                          </span>
-                          <span>
-                            Updated {formatTimestamp(task.updatedAt)}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-
-                    <div className="task-card composer">
-                      <input
-                        type="text"
-                        placeholder="Add a task..."
-                        value={newTaskTitles[column.id] ?? ""}
-                        onChange={(event) =>
-                          setNewTaskTitles((prev) => ({
-                            ...prev,
-                            [column.id]: event.target.value
-                          }))
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            createTask(column.id);
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => createTask(column.id)}
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        {activeView === "board" && (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-2 mb-6">
+            <TagManager
+              tags={tags}
+              activeTags={activeTags}
+              toggleTagFilter={toggleTagFilter}
+              setShowTagManager={setShowTagManager}
+            />
           </div>
         )}
-      </section>
-      ) : null}
 
-      {activeView === "planner" ? (
-      <section id="planner-section" className="planner-shell reveal">
-        <div className="section-header">
-          <div>
-            <p className="section-eyebrow">Task Planner</p>
-            <h2>Capacity & Focus Strategy</h2>
+        {error && (
+          <div className="mb-6 rounded-xl border border-danger/30 bg-danger/10 p-4 text-danger">
+            <strong>Error:</strong> {error}
           </div>
-          <div className="section-actions">
-            <div className="pill">{openTasks.length} open tasks</div>
-            <div className="pill ghost">Load {plannedHours.toFixed(1)}h</div>
-          </div>
-        </div>
+        )}
 
-        <div className="planner-grid">
-          <div className="planner-left">
-            <div className="planner-card">
-              <div className="planner-card-header">
-                <h3>Capacity Radar</h3>
-                <span className="muted">Weekly planning</span>
-              </div>
-              <label>
-                Capacity hours
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={weeklyCapacity}
-                  onChange={(event) =>
-                    setWeeklyCapacity(Number(event.target.value || 0))
-                  }
-                />
-              </label>
-              <div className="capacity-bar">
-                <div style={{ width: `${Math.min(capacityUsage * 100, 100)}%` }} />
-              </div>
-              <div className="capacity-meta">
-                <div>
-                  <span>Planned</span>
-                  <strong>{plannedHours.toFixed(1)}h</strong>
-                </div>
-                <div>
-                  <span>Capacity</span>
-                  <strong>{weeklyCapacity}h</strong>
-                </div>
-                <div>
-                  <span>Load</span>
-                  <strong>{Math.round(capacityUsage * 100)}%</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="planner-card">
-              <div className="planner-card-header">
-                <h3>Focus Queue</h3>
-                <span className="muted">Auto-ranked by impact</span>
-              </div>
-              {focusQueue.length === 0 ? (
-                <p className="muted">No focus tasks yet.</p>
-              ) : (
-                <div className="focus-list">
-                  {focusQueue.map((task) => (
-                    <div key={task.id} className="focus-item">
-                      <div>
-                        <strong>{task.title}</strong>
-                        <span>
-                          Due {formatShortDate(task.dueDate)} ·{" "}
-                          {task.estimateHours ?? "--"}h
-                        </span>
-                      </div>
-                      <span className={`priority ${task.priority}`}>
-                        {task.priority}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="planner-card">
-              <div className="planner-card-header">
-                <h3>Dependency Watch</h3>
-                <span className="muted">Blocked by prerequisites</span>
-              </div>
-              {blockedTasks.length === 0 ? (
-                <p className="muted">No blockers detected.</p>
-              ) : (
-                <div className="blocked-list">
-                  {blockedTasks.map((task) => (
-                    <div key={task.id} className="blocked-item">
-                      <strong>{task.title}</strong>
-                      <span>
-                        {(task.dependencies ?? []).length} dependencies
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="planner-card">
-              <div className="planner-card-header">
-                <h3>Telemetry Stream</h3>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setTrackingEnabled((prev) => !prev)}
-                >
-                  {trackingEnabled ? "Tracking On" : "Tracking Off"}
-                </button>
-              </div>
-              <p className="muted">
-                Signals are kept temporarily for analysis (48h retention).
-              </p>
-              <div className="signals-list" ref={signalsRef}>
-                {signals.length === 0 ? (
-                  <div className="empty-note">No signals captured yet.</div>
-                ) : (
-                  signals.slice(0, 6).map((signal) => (
-                    <div key={signal.id} className="signal-item">
-                      <span>{signal.message}</span>
-                      <span>{formatShortDate(signal.createdAt)}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="planner-right">
-            <div className="planner-table">
-              <div className="planner-row planner-header">
-                <span>Task</span>
-                <span>Priority</span>
-                <span>Due</span>
-                <span>Est</span>
-                <span>Impact</span>
-                <span>Effort</span>
-                <span>Deps</span>
-              </div>
-              {plannerTasks.length === 0 ? (
-                <div className="empty-state">No open tasks.</div>
-              ) : (
-                plannerTasks.map((task) => {
-                  const deps = task.dependencies ?? [];
-                  const unresolved = deps.filter((depId) => !doneTaskIds.has(depId));
-                  const impactValue = (getPlanValue(task, "impact") ??
-                    "Medium") as Level;
-                  const effortValue = (getPlanValue(task, "effort") ??
-                    "Medium") as Level;
-                  const dueValue = formatInputDate(
-                    getPlanValue(task, "dueDate") as string | undefined
-                  );
-                  const estimateValue = getPlanValue(
-                    task,
-                    "estimateHours"
-                  ) as number | undefined;
-                  return (
-                    <div key={task.id} className="planner-row">
-                      <div className="planner-task">
-                        <strong>{task.title}</strong>
-                        <span>Updated {formatShortDate(task.updatedAt)}</span>
-                      </div>
-                      <span className={`priority ${task.priority}`}>
-                        {task.priority}
-                      </span>
-                      <input
-                        type="date"
-                        value={dueValue}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          updatePlanDraft(task.id, {
-                            dueDate: value
-                              ? new Date(value).toISOString()
-                              : undefined
-                          });
-                        }}
-                        onBlur={() => commitPlanDraft(task.id)}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={estimateValue ?? ""}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          const parsed = Number(value);
-                          updatePlanDraft(task.id, {
-                            estimateHours:
-                              value === "" || Number.isNaN(parsed)
-                                ? undefined
-                                : parsed
-                          });
-                        }}
-                        onBlur={() => commitPlanDraft(task.id)}
-                      />
-                      <select
-                        value={impactValue}
-                        onChange={(event) =>
-                          updatePlanDraft(task.id, {
-                            impact: event.target.value as Level
-                          })
-                        }
-                        onBlur={() => commitPlanDraft(task.id)}
-                      >
-                        {levels.map((level) => (
-                          <option key={level} value={level}>
-                            {level}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={effortValue}
-                        onChange={(event) =>
-                          updatePlanDraft(task.id, {
-                            effort: event.target.value as Level
-                          })
-                        }
-                        onBlur={() => commitPlanDraft(task.id)}
-                      >
-                        {levels.map((level) => (
-                          <option key={level} value={level}>
-                            {level}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="planner-deps">
-                        <span>{deps.length}</span>
-                        {unresolved.length > 0 ? (
-                          <span className="muted">Blocked</span>
-                        ) : (
-                          <span className="muted">Clear</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-      ) : null}
-
-      {activeView === "preferences" ? (
-      <section id="preferences-section" className="preferences-shell reveal">
-        <div className="section-header">
-          <div>
-            <p className="section-eyebrow">Preference Lab</p>
-            <h2>Decision Calibration</h2>
-          </div>
-          <div className="section-actions">
-            <div className="pill">{preferenceQueue.length} in queue</div>
-            <div className="pill ghost">{preferenceStats.total} total</div>
-          </div>
-        </div>
-
-        <div className="preferences-grid">
-          <div className="preferences-left">
-            <div className="preference-stack">
-              <div className="preference-card" ref={preferenceCardRef}>
-                {preferenceQueue.length === 0 ? (
-                  <div className="empty-state">
-                    Preference queue is empty.
-                  </div>
-                ) : (
-                  <>
-                    <p className="section-eyebrow">OpenClaw prompt</p>
-                    <h3>{preferenceQueue[0].prompt}</h3>
-                    <p className="muted">
-                      Choose the direction that best matches your intent.
-                    </p>
-                    <div className="preference-meter">
-                      <label>
-                        Confidence
-                        <input
-                          type="range"
-                          min="1"
-                          max="5"
-                          value={preferenceConfidence}
-                          onChange={(event) =>
-                            setPreferenceConfidence(Number(event.target.value))
-                          }
-                        />
-                      </label>
-                      <span>{preferenceConfidence}/5</span>
-                    </div>
-                    <div className="preference-actions">
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          handlePreferenceDecision(preferenceQueue[0], "left")
-                        }
-                      >
-                        {preferenceQueue[0].leftLabel || "No"}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          handlePreferenceDecision(preferenceQueue[0], "skip")
-                        }
-                      >
-                        Skip
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handlePreferenceDecision(preferenceQueue[0], "right")
-                        }
-                      >
-                        {preferenceQueue[0].rightLabel || "Yes"}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="preference-stats">
-              <div>
-                <span>Right</span>
-                <strong>{preferenceStats.right}</strong>
-              </div>
-              <div>
-                <span>Left</span>
-                <strong>{preferenceStats.left}</strong>
-              </div>
-              <div>
-                <span>Skipped</span>
-                <strong>{preferenceStats.skip}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="preferences-right">
-            <div className="preference-form">
-              <h3>New Preference Prompt</h3>
-              <label>
-                Prompt
-                <textarea
-                  rows={3}
-                  value={preferenceDraft.prompt}
-                  onChange={(event) =>
-                    setPreferenceDraft((prev) => ({
-                      ...prev,
-                      prompt: event.target.value
-                    }))
-                  }
-                />
-              </label>
-              <div className="preference-row">
-                <label>
-                  Left label
-                  <input
-                    type="text"
-                    value={preferenceDraft.leftLabel}
-                    onChange={(event) =>
-                      setPreferenceDraft((prev) => ({
-                        ...prev,
-                        leftLabel: event.target.value
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Right label
-                  <input
-                    type="text"
-                    value={preferenceDraft.rightLabel}
-                    onChange={(event) =>
-                      setPreferenceDraft((prev) => ({
-                        ...prev,
-                        rightLabel: event.target.value
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-              <label>
-                Notes / OpenClaw hint
-                <textarea
-                  rows={2}
-                  value={preferenceDraft.notes}
-                  onChange={(event) =>
-                    setPreferenceDraft((prev) => ({
-                      ...prev,
-                      notes: event.target.value
-                    }))
-                  }
-                />
-              </label>
-              <div className="script-tags">
-                <span>Tags</span>
-                {tags.length === 0 ? (
-                  <p className="muted">Create tags to label preferences.</p>
-                ) : (
-                  <div className="tag-select">
-                    {tags.map((tag) => (
-                      <label key={tag.id} className="tag-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={preferenceDraft.tags.includes(tag.id)}
-                          onChange={() => togglePreferenceTag(tag.id)}
-                        />
-                        <span style={{ background: tag.color }} />
-                        {tag.label}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="form-actions">
-                <button type="button" onClick={submitPreference}>
-                  Add preference
-                </button>
-              </div>
-            </div>
-
-            <div className="preference-list">
-              {preferences.length === 0 ? (
-                <div className="empty-state">No preferences captured.</div>
-              ) : (
-                preferences.map((preference) => (
-                  <div key={preference.id} className="preference-row-card">
-                    <div>
-                      <strong>{preference.prompt}</strong>
-                      <p className="muted">
-                        Decision: {preference.decision}
-                      </p>
-                    </div>
-                    <div className="preference-actions-inline">
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          updatePreference(preference.id, {
-                            decision: "unset"
-                          })
-                        }
-                      >
-                        Reset
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button danger"
-                        onClick={() => deletePreference(preference.id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-      ) : null}
-
-      {activeView === "experiments" ? (
-      <section id="experiments-section" className="experiments-shell reveal">
-        <div className="section-header">
-          <div>
-            <p className="section-eyebrow">Experiment Tracker</p>
-            <h2>Hypotheses & Test Outcomes</h2>
-          </div>
-          <div className="section-actions">
-            <div className="pill">{experiments.length} experiments</div>
-          </div>
-        </div>
-
-        <div className="experiments-layout">
-          <div className="experiment-form">
-            <h3>{editingExperimentId ? "Edit Experiment" : "New Experiment"}</h3>
-            <label>
-              Title
-              <input
-                type="text"
-                value={experimentDraft.title}
-                onChange={(event) =>
-                  setExperimentDraft((prev) => ({
-                    ...prev,
-                    title: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label>
-              Hypothesis
-              <textarea
-                rows={3}
-                value={experimentDraft.hypothesis}
-                onChange={(event) =>
-                  setExperimentDraft((prev) => ({
-                    ...prev,
-                    hypothesis: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label>
-              Metric
-              <input
-                type="text"
-                value={experimentDraft.metric}
-                onChange={(event) =>
-                  setExperimentDraft((prev) => ({
-                    ...prev,
-                    metric: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <div className="experiment-row">
-              <label>
-                Status
-                <select
-                  value={experimentDraft.status}
-                  onChange={(event) =>
-                    setExperimentDraft((prev) => ({
-                      ...prev,
-                      status: event.target.value as ExperimentStatus
-                    }))
-                  }
-                >
-                  {experimentStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Result
-                <select
-                  value={experimentDraft.result}
-                  onChange={(event) =>
-                    setExperimentDraft((prev) => ({
-                      ...prev,
-                      result: event.target.value as ExperimentResult
-                    }))
-                  }
-                >
-                  {experimentResults.map((result) => (
-                    <option key={result} value={result}>
-                      {result}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="experiment-row">
-              <label>
-                Start date
-                <input
-                  type="date"
-                  value={experimentDraft.startDate}
-                  onChange={(event) =>
-                    setExperimentDraft((prev) => ({
-                      ...prev,
-                      startDate: event.target.value
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                End date
-                <input
-                  type="date"
-                  value={experimentDraft.endDate}
-                  onChange={(event) =>
-                    setExperimentDraft((prev) => ({
-                      ...prev,
-                      endDate: event.target.value
-                    }))
-                  }
-                />
-              </label>
-            </div>
-            <label>
-              Owner
-              <input
-                type="text"
-                value={experimentDraft.owner}
-                onChange={(event) =>
-                  setExperimentDraft((prev) => ({
-                    ...prev,
-                    owner: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label>
-              Notes
-              <textarea
-                rows={3}
-                value={experimentDraft.notes}
-                onChange={(event) =>
-                  setExperimentDraft((prev) => ({
-                    ...prev,
-                    notes: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <div className="script-tags">
-              <span>Tags</span>
-              {tags.length === 0 ? (
-                <p className="muted">Create tags to label experiments.</p>
-              ) : (
-                <div className="tag-select">
-                  {tags.map((tag) => (
-                    <label key={tag.id} className="tag-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={experimentDraft.tags.includes(tag.id)}
-                        onChange={() => toggleExperimentTag(tag.id)}
-                      />
-                      <span style={{ background: tag.color }} />
-                      {tag.label}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="form-actions">
-              <button type="button" onClick={submitExperiment}>
-                {editingExperimentId ? "Save changes" : "Save experiment"}
-              </button>
-              {editingExperimentId ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={cancelEditExperiment}
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="experiment-grid" ref={experimentsRef}>
-            {experiments.length === 0 ? (
-              <div className="empty-state">No experiments yet.</div>
-            ) : (
-              experiments.map((experiment) => (
-                <div key={experiment.id} className="experiment-card">
-                  <div className="experiment-header">
-                    <div>
-                      <h3>{experiment.title}</h3>
-                      <p>{experiment.hypothesis || "No hypothesis"}</p>
-                    </div>
-                    <span className="status-pill" data-status={experiment.status}>
-                      {experiment.status}
-                    </span>
-                  </div>
-                  <div className="experiment-meta">
-                    <span>Metric: {experiment.metric || "--"}</span>
-                    <span>Result: {experiment.result}</span>
-                  </div>
-                  <div className="experiment-dates">
-                    <span>
-                      Start {formatShortDate(experiment.startDate)}
-                    </span>
-                    <span>End {formatShortDate(experiment.endDate)}</span>
-                  </div>
-                  <div className="script-tags">
-                    {experiment.tags.length === 0 ? (
-                      <span className="muted">No tags</span>
-                    ) : (
-                      experiment.tags.map((tagId) => (
-                        <span
-                          key={tagId}
-                          className="tag-dot"
-                          style={{ background: getTagColor(tagId, tags) }}
-                        />
-                      ))
-                    )}
-                  </div>
-                  <div className="script-actions">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => startEditExperiment(experiment)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button danger"
-                      onClick={() => deleteExperiment(experiment.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-      ) : null}
-
-      {activeView === "scripts" ? (
-      <section id="scripts-section" className="scripts-shell reveal">
-        <div className="section-header">
-          <div>
-            <p className="section-eyebrow">Scripts</p>
-            <h2>Mini-Scripts Registry</h2>
-          </div>
-          <div className="section-actions">
-            <div className="pill">{scripts.length} scripts</div>
-          </div>
-        </div>
-
-        <div className="scripts-layout">
-          <div className="script-form">
-            <h3>{editingScriptId ? "Edit Script" : "New Script"}</h3>
-            <label>
-              Name
-              <input
-                type="text"
-                value={scriptDraft.name}
-                onChange={(event) =>
-                  setScriptDraft((prev) => ({
-                    ...prev,
-                    name: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label>
-              Description
-              <textarea
-                rows={3}
-                value={scriptDraft.description}
-                onChange={(event) =>
-                  setScriptDraft((prev) => ({
-                    ...prev,
-                    description: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label>
-              Command
-              <textarea
-                rows={3}
-                value={scriptDraft.command}
-                onChange={(event) =>
-                  setScriptDraft((prev) => ({
-                    ...prev,
-                    command: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <div className="script-tags">
-              <span>Tags</span>
-              {tags.length === 0 ? (
-                <p className="muted">Create tags to label scripts.</p>
-              ) : (
-                <div className="tag-select">
-                  {tags.map((tag) => (
-                    <label key={tag.id} className="tag-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={scriptDraft.tags.includes(tag.id)}
-                        onChange={() => toggleScriptTag(tag.id)}
-                      />
-                      <span style={{ background: tag.color }} />
-                      {tag.label}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <label className="favorite-toggle">
-              <input
-                type="checkbox"
-                checked={scriptDraft.favorite}
-                onChange={(event) =>
-                  setScriptDraft((prev) => ({
-                    ...prev,
-                    favorite: event.target.checked
-                  }))
-                }
-              />
-              Favorite
-            </label>
-            <div className="form-actions">
-              <button type="button" onClick={submitScript}>
-                {editingScriptId ? "Save changes" : "Save script"}
-              </button>
-              {editingScriptId ? (
-                <button type="button" className="ghost-button" onClick={cancelEditScript}>
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="script-grid" ref={scriptsRef}>
-            {scripts.length === 0 ? (
-              <div className="empty-state">No scripts yet.</div>
-            ) : (
-              scripts
-                .slice()
-                .sort((a, b) => Number(b.favorite) - Number(a.favorite))
-                .map((script) => (
-                  <div key={script.id} className="script-card">
-                    <div className="script-header">
-                      <div>
-                        <h3>{script.name}</h3>
-                        <p>{script.description || "No description"}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className={
-                          script.favorite ? "icon-button active" : "icon-button"
-                        }
-                        onClick={() => toggleFavoriteScript(script)}
-                        aria-label={
-                          script.favorite
-                            ? "Unfavorite script"
-                            : "Favorite script"
-                        }
-                      >
-                        ★
-                      </button>
-                    </div>
-                    <div className="script-command">
-                      <code>{script.command}</code>
-                    </div>
-                    <div className="script-tags">
-                      {script.tags.length === 0 ? (
-                        <span className="muted">No tags</span>
-                      ) : (
-                        script.tags.map((tagId) => (
-                          <span
-                            key={tagId}
-                            className="tag-dot"
-                            style={{ background: getTagColor(tagId, tags) }}
-                          />
-                        ))
-                      )}
-                    </div>
-                    <div className="script-actions">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyScript(script)}
-                      >
-                        {copiedScriptId === script.id ? "Copied" : "Copy"}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => startEditScript(script)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button danger"
-                        onClick={() => deleteScript(script.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))
-            )}
-          </div>
-        </div>
-      </section>
-      ) : null}
-
-      {selectedTask ? (
-        <TaskDrawer
-          task={selectedTask}
+        <TagManagerModal
+          open={showTagManager}
           tags={tags}
-          tasks={tasks}
-          onClose={() => setSelectedTaskId(null)}
-          onUpdate={updateTask}
-          onDelete={deleteTask}
+          tagDraft={tagDraft}
+          setTagDraft={setTagDraft}
+          editingTagId={editingTagId}
+          setEditingTagId={setEditingTagId}
+          onClose={() => {
+            setShowTagManager(false);
+            resetTagDraft();
+          }}
+          submitTag={submitTag}
+          deleteTag={deleteTag}
         />
-      ) : null}
 
-      {pendingMove ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Definition of Done incomplete</h3>
-            <p>
-              This task has unchecked Definition of Done items. Move it to Done
-              anyway?
-            </p>
-            <div className="modal-actions">
-              <button
-                type="button"
-                onClick={() => {
-                  moveTask(pendingMove.taskId, pendingMove.columnId);
-                  setPendingMove(null);
-                }}
-              >
-                Move anyway
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => setPendingMove(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showTagManager ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Manage Tags</h3>
-            <label>
-              Label
-              <input
-                type="text"
-                value={tagDraft.label}
-                onChange={(event) =>
-                  setTagDraft((prev) => ({
-                    ...prev,
-                    label: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label>
-              Color
-              <input
-                type="color"
-                value={tagDraft.color}
-                onChange={(event) =>
-                  setTagDraft((prev) => ({
-                    ...prev,
-                    color: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <div className="modal-actions">
-              <button type="button" onClick={createTag}>
-                Add tag
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => setShowTagManager(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="tag-list">
-              {tags.length === 0 ? (
-                <p className="muted">No tags created.</p>
-              ) : (
-                tags.map((tag) => (
-                  <div key={tag.id} className="tag-row">
-                    <span className="tag-swatch" style={{ background: tag.color }} />
-                    <span>{tag.label}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </main>
-  );
-}
-
-type TaskDrawerProps = {
-  task: Task;
-  tags: Tag[];
-  tasks: Task[];
-  onClose: () => void;
-  onUpdate: (taskId: string, patch: Partial<Task>) => void;
-  onDelete: (taskId: string) => void;
-};
-
-function TaskDrawer({
-  task,
-  tags,
-  tasks,
-  onClose,
-  onUpdate,
-  onDelete
-}: TaskDrawerProps) {
-  const [draft, setDraft] = useState({
-    title: task.title,
-    description: task.description,
-    notes: task.notes,
-    priority: task.priority,
-    tags: task.tags,
-    estimateHours: task.estimateHours ?? 0,
-    dueDate: formatInputDate(task.dueDate),
-    impact: task.impact ?? "Medium",
-    effort: task.effort ?? "Medium",
-    dependencies: task.dependencies ?? [],
-    confidence: task.confidence ?? 3
-  });
-  const [privateDraft, setPrivateDraft] = useState({
-    sensitiveNotes: task.sensitiveNotes ?? "",
-    privateNumbers: task.privateNumbers ?? ""
-  });
-  const [privateVisible, setPrivateVisible] = useState(false);
-  const [accessGranted, setAccessGranted] = useState(false);
-  const [showAccessPrompt, setShowAccessPrompt] = useState(false);
-  const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [newDefinitionItem, setNewDefinitionItem] = useState("");
-  const [newLinkLabel, setNewLinkLabel] = useState("");
-  const [newLinkUrl, setNewLinkUrl] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.sessionStorage.getItem("jarvis_private_access");
-    setAccessGranted(stored === "true");
-  }, []);
-
-  useEffect(() => {
-    setDraft({
-      title: task.title,
-      description: task.description,
-      notes: task.notes,
-      priority: task.priority,
-      tags: task.tags,
-      estimateHours: task.estimateHours ?? 0,
-      dueDate: formatInputDate(task.dueDate),
-      impact: task.impact ?? "Medium",
-      effort: task.effort ?? "Medium",
-      dependencies: task.dependencies ?? [],
-      confidence: task.confidence ?? 3
-    });
-    setPrivateDraft({
-      sensitiveNotes: task.sensitiveNotes ?? "",
-      privateNumbers: task.privateNumbers ?? ""
-    });
-    setPrivateVisible(false);
-    setShowAccessPrompt(false);
-  }, [task]);
-
-  const toggleTag = (tagId: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter((id) => id !== tagId)
-        : [...prev.tags, tagId]
-    }));
-  };
-
-  const toggleDependency = (taskId: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      dependencies: prev.dependencies.includes(taskId)
-        ? prev.dependencies.filter((id) => id !== taskId)
-        : [...prev.dependencies, taskId]
-    }));
-  };
-
-  const saveDraft = () => {
-    onUpdate(task.id, {
-      title: draft.title.trim() || task.title,
-      description: draft.description,
-      notes: draft.notes,
-      sensitiveNotes: privateDraft.sensitiveNotes,
-      privateNumbers: privateDraft.privateNumbers,
-      priority: draft.priority,
-      tags: draft.tags,
-      estimateHours: draft.estimateHours,
-      dueDate: draft.dueDate ? new Date(draft.dueDate).toISOString() : undefined,
-      impact: draft.impact,
-      effort: draft.effort,
-      dependencies: draft.dependencies,
-      confidence: draft.confidence
-    });
-  };
-
-  const requestPrivateReveal = () => {
-    if (privateVisible) {
-      setPrivateVisible(false);
-      return;
-    }
-    if (accessGranted) {
-      setPrivateVisible(true);
-      return;
-    }
-    setShowAccessPrompt(true);
-  };
-
-  const allowPrivateAccess = () => {
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("jarvis_private_access", "true");
-    }
-    setAccessGranted(true);
-    setShowAccessPrompt(false);
-    setPrivateVisible(true);
-  };
-
-  const updateChecklist = (items: ChecklistItem[]) => {
-    onUpdate(task.id, { checklist: items });
-  };
-
-  const updateDefinition = (items: ChecklistItem[]) => {
-    onUpdate(task.id, { definitionOfDone: items });
-  };
-
-  const toggleChecklistItem = (items: ChecklistItem[], itemId: string) => {
-    return items.map((item) =>
-      item.id === itemId ? { ...item, done: !item.done } : item
-    );
-  };
-
-  const addChecklistItem = (
-    items: ChecklistItem[],
-    text: string
-  ): ChecklistItem[] => {
-    const trimmed = text.trim();
-    if (!trimmed) return items;
-    return [
-      ...items,
-      {
-        id: createClientId(),
-        text: trimmed,
-        done: false
-      }
-    ];
-  };
-
-  const removeChecklistItem = (items: ChecklistItem[], itemId: string) => {
-    return items.filter((item) => item.id !== itemId);
-  };
-
-  const addLink = (links: LinkItem[]) => {
-    const label = newLinkLabel.trim();
-    const url = newLinkUrl.trim();
-    if (!label || !url) return;
-
-    const next: LinkItem[] = [
-      ...links,
-      {
-        id: createClientId(),
-        label,
-        url
-      }
-    ];
-    onUpdate(task.id, { links: next });
-    setNewLinkLabel("");
-    setNewLinkUrl("");
-  };
-
-  const removeLink = (links: LinkItem[], linkId: string) => {
-    const next = links.filter((link) => link.id !== linkId);
-    onUpdate(task.id, { links: next });
-  };
-
-  const checklist = task.checklist ?? [];
-  const definition = task.definitionOfDone ?? [];
-  const links = task.links ?? [];
-
-  return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
-      <aside className="drawer">
-        <div className="drawer-header">
-          <div>
-            <p className="eyebrow">Task Detail</p>
-            <h2>{task.title}</h2>
-          </div>
-          <button type="button" className="ghost-button" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <div className="drawer-body">
-          <label>
-            Title
-            <input
-              type="text"
-              value={draft.title}
-              onChange={(event) =>
-                setDraft((prev) => ({ ...prev, title: event.target.value }))
-              }
+        {activeView === "board" && (
+          <div className="animate-fade-in">
+            <BoardView
+              columns={columnsSorted}
+              tasksByColumn={tasksByColumn}
+              tags={tags}
+              dragOverColumnId={dragOverColumnId}
+              loading={loading}
+              setDragOverColumnId={setDragOverColumnId}
+              handleDrop={handleDrop}
+              handleDragStart={handleDragStart}
+              setSelectedTaskId={setSelectedTaskId}
+              newTaskTitles={newTaskTitles}
+              setNewTaskTitles={setNewTaskTitles}
+              createTask={createTask}
             />
-          </label>
-
-          <label>
-            Priority
-            <select
-              value={draft.priority}
-              onChange={(event) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  priority: event.target.value as Priority
-                }))
-              }
-            >
-              {priorities.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="drawer-section">
-            <span className="section-label">Tags</span>
-            {tags.length === 0 ? (
-              <p className="muted">No tags yet.</p>
-            ) : (
-              <div className="tag-select">
-                {tags.map((tag) => (
-                  <label key={tag.id} className="tag-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={draft.tags.includes(tag.id)}
-                      onChange={() => toggleTag(tag.id)}
-                    />
-                    <span style={{ background: tag.color }} />
-                    {tag.label}
-                  </label>
-                ))}
-              </div>
-            )}
           </div>
+        )}
 
-          <div className="drawer-section">
-            <div className="section-header">
-              <div>
-                <p className="section-eyebrow">Planning</p>
-                <h3>Effort & Timing</h3>
-              </div>
-            </div>
-            <div className="planning-grid">
-              <label>
-                Due date
-                <input
-                  type="date"
-                  value={draft.dueDate}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      dueDate: event.target.value
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Estimate (hours)
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={draft.estimateHours ?? 0}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      estimateHours: Number(event.target.value || 0)
-                    }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="planning-grid">
-              <label>
-                Impact
-                <select
-                  value={draft.impact}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      impact: event.target.value as Level
-                    }))
-                  }
-                >
-                  {levels.map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Effort
-                <select
-                  value={draft.effort}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      effort: event.target.value as Level
-                    }))
-                  }
-                >
-                  {levels.map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label>
-              Confidence ({draft.confidence}/5)
-              <input
-                type="range"
-                min="1"
-                max="5"
-                value={draft.confidence}
-                onChange={(event) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    confidence: Number(event.target.value)
-                  }))
-                }
-              />
-            </label>
-            <div className="dependency-block">
-              <span className="section-label">Dependencies</span>
-              {tasks.filter((item) => item.id !== task.id).length === 0 ? (
-                <p className="muted">No other tasks yet.</p>
-              ) : (
-                <div className="tag-select">
-                  {tasks
-                    .filter((item) => item.id !== task.id)
-                    .map((item) => (
-                      <label key={item.id} className="tag-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={draft.dependencies.includes(item.id)}
-                          onChange={() => toggleDependency(item.id)}
-                        />
-                        <span className="tag-dot" />
-                        {item.title}
-                      </label>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>
+        {activeView === "planner" && (
+          <div className="animate-fade-in">
+          <PlannerView
+            openTasks={openTasks}
+            plannedHours={plannedHours}
+            weeklyCapacity={weeklyCapacity}
+            setWeeklyCapacity={setWeeklyCapacity}
+            capacityUsage={capacityUsage}
+            focusQueue={focusQueue}
+            blockedTasks={blockedTasks}
+            trackingEnabled={trackingEnabled}
+            setTrackingEnabled={setTrackingEnabled}
+            signals={signals}
+            plannerTasks={plannerTasks}
+            doneTaskIds={doneTaskIds}
+            getPlanValue={getPlanValue}
+            updatePlanDraft={updatePlanDraft}
+            commitPlanDraft={commitPlanDraft}
+            setTaskSwarmRequired={setTaskSwarmRequired}
+            setTaskProcessingMode={setTaskProcessingMode}
+            isBatchEligible={isBatchEligible}
+          />
+        </div>
+      )}
 
-          <label>
-            Description
-            <textarea
-              rows={4}
-              value={draft.description}
-              onChange={(event) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  description: event.target.value
-                }))
-              }
+        {activeView === "preferences" && (
+          <div className="animate-fade-in">
+            <PreferencesView
+              preferences={preferences}
+              tags={tags}
+              preferenceDraft={preferenceDraft}
+              setPreferenceDraft={setPreferenceDraft}
+              preferenceConfidence={preferenceConfidence}
+              setPreferenceConfidence={setPreferenceConfidence}
+              preferenceQueue={preferenceQueue}
+              preferenceStats={preferenceStats}
+              togglePreferenceTag={togglePreferenceTag}
+              submitPreference={submitPreference}
+              updatePreference={updatePreference}
+              deletePreference={deletePreference}
+              handlePreferenceDecision={handlePreferenceDecision}
+              preferenceCardRef={preferenceCardRef}
             />
-          </label>
+          </div>
+        )}
 
-          <label>
-            Notes
-            <textarea
-              rows={4}
-              value={draft.notes}
-              onChange={(event) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  notes: event.target.value
-                }))
-              }
+        {activeView === "experiments" && (
+          <div className="animate-fade-in">
+            <ExperimentsView
+              experiments={experiments}
+              tags={tags}
+              experimentDraft={experimentDraft}
+              setExperimentDraft={setExperimentDraft}
+              editingExperimentId={editingExperimentId}
+              toggleExperimentTag={toggleExperimentTag}
+              submitExperiment={submitExperiment}
+              startEditExperiment={startEditExperiment}
+              cancelEditExperiment={cancelEditExperiment}
+              deleteExperiment={deleteExperiment}
             />
-          </label>
-
-          <div className="drawer-section private-section">
-            <div className="section-header">
-              <div>
-                <p className="section-eyebrow">Private</p>
-                <h3>Encrypted fields</h3>
-              </div>
-              <div className="private-actions">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={requestPrivateReveal}
-                >
-                  {privateVisible ? "Hide" : "Reveal"}
-                </button>
-              </div>
-            </div>
-            <p className="muted">
-              Stored encrypted at rest. Reveal to view or edit.
-            </p>
-            <div className="private-fields">
-              <label>
-                Sensitive notes
-                <textarea
-                  rows={3}
-                  className={`private-field ${privateVisible ? "reveal" : ""}`}
-                  value={privateVisible ? privateDraft.sensitiveNotes : ""}
-                  placeholder={
-                    privateVisible
-                      ? "Add sensitive notes…"
-                      : "Hidden. Click Reveal to view."
-                  }
-                  onChange={(event) =>
-                    setPrivateDraft((prev) => ({
-                      ...prev,
-                      sensitiveNotes: event.target.value
-                    }))
-                  }
-                  disabled={!privateVisible}
-                />
-              </label>
-              <label>
-                Private numbers
-                <textarea
-                  rows={3}
-                  className={`private-field ${privateVisible ? "reveal" : ""}`}
-                  value={privateVisible ? privateDraft.privateNumbers : ""}
-                  placeholder={
-                    privateVisible
-                      ? "Store countable info (JSON, lists, totals)…"
-                      : "Hidden. Click Reveal to view."
-                  }
-                  onChange={(event) =>
-                    setPrivateDraft((prev) => ({
-                      ...prev,
-                      privateNumbers: event.target.value
-                    }))
-                  }
-                  disabled={!privateVisible}
-                />
-              </label>
-            </div>
           </div>
+        )}
 
-          <div className="drawer-section">
-            <div className="section-header">
-              <div>
-                <p className="section-eyebrow">Checklist</p>
-                <h3>Subtasks</h3>
-              </div>
-            </div>
-            <div className="checklist">
-              {checklist.length === 0 ? (
-                <p className="muted">No subtasks yet.</p>
-              ) : (
-                checklist.map((item) => (
-                  <label key={item.id} className="check-item">
-                    <input
-                      type="checkbox"
-                      checked={item.done}
-                      onChange={() =>
-                        updateChecklist(toggleChecklistItem(checklist, item.id))
-                      }
-                    />
-                    <span>{item.text}</span>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() =>
-                        updateChecklist(removeChecklistItem(checklist, item.id))
-                      }
-                    >
-                      Remove
-                    </button>
-                  </label>
-                ))
-              )}
-            </div>
-            <div className="check-add">
-              <input
-                type="text"
-                placeholder="Add a subtask"
-                value={newChecklistItem}
-                onChange={(event) => setNewChecklistItem(event.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const next = addChecklistItem(checklist, newChecklistItem);
-                  updateChecklist(next);
-                  setNewChecklistItem("");
-                }}
-              >
-                Add
-              </button>
-            </div>
+        {activeView === "labs" && (
+          <div className="animate-fade-in">
+            <LabsView />
           </div>
+        )}
 
-          <div className="drawer-section">
-            <div className="section-header">
-              <div>
-                <p className="section-eyebrow">Definition of Done</p>
-                <h3>Quality Checklist</h3>
-              </div>
-              <span className="pill">
-                {definition.filter((item) => item.done).length}/{
-                  definition.length
-                }
-              </span>
-            </div>
-            <div className="checklist">
-              {definition.length === 0 ? (
-                <p className="muted">No quality checklist yet.</p>
-              ) : (
-                definition.map((item) => (
-                  <label key={item.id} className="check-item">
-                    <input
-                      type="checkbox"
-                      checked={item.done}
-                      onChange={() =>
-                        updateDefinition(toggleChecklistItem(definition, item.id))
-                      }
-                    />
-                    <span>{item.text}</span>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() =>
-                        updateDefinition(removeChecklistItem(definition, item.id))
-                      }
-                    >
-                      Remove
-                    </button>
-                  </label>
-                ))
-              )}
-            </div>
-            <div className="check-add">
-              <input
-                type="text"
-                placeholder="Add a quality check"
-                value={newDefinitionItem}
-                onChange={(event) => setNewDefinitionItem(event.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const next = addChecklistItem(definition, newDefinitionItem);
-                  updateDefinition(next);
-                  setNewDefinitionItem("");
-                }}
-              >
-                Add
-              </button>
-            </div>
+        {activeView === "scripts" && (
+          <div className="animate-fade-in">
+            <ScriptsView
+              scripts={scripts}
+              tags={tags}
+              scriptDraft={scriptDraft}
+              setScriptDraft={setScriptDraft}
+              editingScriptId={editingScriptId}
+              toggleScriptTag={toggleScriptTag}
+              submitScript={submitScript}
+              startEditScript={startEditScript}
+              cancelEditScript={cancelEditScript}
+              toggleFavoriteScript={toggleFavoriteScript}
+              deleteScript={deleteScript}
+              handleCopyScript={handleCopyScript}
+            />
           </div>
+        )}
 
-          <div className="drawer-section">
-            <div className="section-header">
-              <div>
-                <p className="section-eyebrow">Links</p>
-                <h3>References</h3>
-              </div>
-            </div>
-            <div className="link-list">
-              {links.length === 0 ? (
-                <p className="muted">No links yet.</p>
-              ) : (
-                links.map((link) => (
-                  <div key={link.id} className="link-item">
-                    <div>
-                      <strong>{link.label}</strong>
-                      <a href={link.url} target="_blank" rel="noreferrer">
-                        {link.url}
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => removeLink(links, link.id)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="link-add">
-              <input
-                type="text"
-                placeholder="Label"
-                value={newLinkLabel}
-                onChange={(event) => setNewLinkLabel(event.target.value)}
-              />
-              <input
-                type="url"
-                placeholder="https://"
-                value={newLinkUrl}
-                onChange={(event) => setNewLinkUrl(event.target.value)}
-              />
-              <button type="button" onClick={() => addLink(links)}>
-                Add link
-              </button>
-            </div>
+        {activeView === "integrations" && (
+          <div className="animate-fade-in">
+            <IntegrationsView />
           </div>
-
-          <div className="drawer-footer">
-            <div className="timestamp">
-              Created {formatTimestamp(task.createdAt)}
-            </div>
-            <div className="timestamp">
-              Updated {formatTimestamp(task.updatedAt)}
-            </div>
-          </div>
-        </div>
-
-        <div className="drawer-actions">
-          <button type="button" onClick={saveDraft}>
-            Save changes
-          </button>
-          <button
-            type="button"
-            className="ghost-button danger"
-            onClick={() => onDelete(task.id)}
-          >
-            Delete task
-          </button>
-        </div>
-      </aside>
-
-      {showAccessPrompt ? (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Allow access to private fields now?</h3>
-            <p className="muted">
-              Private fields are encrypted at rest. Allowing access will reveal
-              them on this device for this session.
-            </p>
-            <div className="modal-actions">
-              <button type="button" onClick={allowPrivateAccess}>
-                Allow
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => setShowAccessPrompt(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
+        )}
+      </main>
+    </div>
   );
 }

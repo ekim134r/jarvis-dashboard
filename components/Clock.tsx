@@ -28,9 +28,13 @@ export default function Clock() {
   }, []);
 
   return (
-    <div className="clock">
-      <div className="clock-time">{now ? formatTime(now) : "--:--:--"}</div>
-      <div className="clock-date">{now ? formatDate(now) : "Loading..."}</div>
+    <div className="flex flex-col justify-center">
+      <div className="font-mono text-xl font-bold tracking-tight text-text tabular-nums leading-none">
+        {now ? formatTime(now) : "--:--:--"}
+      </div>
+      <div className="text-[11px] font-bold uppercase tracking-wider text-muted opacity-80">
+        {now ? formatDate(now) : "Loading..."}
+      </div>
     </div>
   );
 }

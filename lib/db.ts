@@ -23,13 +23,45 @@ const DEFAULT_COLUMNS: Column[] = [
 ];
 
 function createDefaultDb(): Database {
+  const now = new Date().toISOString();
   return {
     tasks: [],
     columns: DEFAULT_COLUMNS.map((column) => ({ ...column })),
     tags: [],
     scripts: [],
     preferences: [],
-    experiments: []
+    experiments: [],
+    chatThreads: [],
+    webhookEvents: [],
+    usageEvents: [],
+    usageAlerts: [],
+    routineCache: [],
+    labFrameworks: [],
+    labSessions: [],
+    labResearchPrompts: [],
+    agent: {
+      status: "idle",
+      gatewayStatus: "ok",
+      metrics: {
+        tokensUsedDaily: 0,
+        tokensUsedWeekly: 0,
+        messagesCount: 0,
+        toolCallsCount: 0,
+        totalCost: 0,
+        uptime: 0,
+        requestsProcessed: 0
+      },
+      lastDeploy: {
+        id: "deploy_boot",
+        environment: "production",
+        url: "https://jarvis-dashboard-dun.vercel.app",
+        status: "success",
+        timestamp: now
+      },
+      activeRuns: 0,
+      recentRuns: [],
+      lastActive: now
+    }
   };
 }
 
@@ -46,7 +78,16 @@ function normalizeDatabase(input: Partial<Database> | undefined): Database {
     tags: Array.isArray(safe.tags) ? safe.tags : [],
     scripts: Array.isArray(safe.scripts) ? safe.scripts : [],
     preferences: Array.isArray(safe.preferences) ? safe.preferences : [],
-    experiments: Array.isArray(safe.experiments) ? safe.experiments : []
+    experiments: Array.isArray(safe.experiments) ? safe.experiments : [],
+    chatThreads: Array.isArray(safe.chatThreads) ? safe.chatThreads : [],
+    webhookEvents: Array.isArray(safe.webhookEvents) ? safe.webhookEvents : [],
+    usageEvents: Array.isArray(safe.usageEvents) ? safe.usageEvents : [],
+    usageAlerts: Array.isArray(safe.usageAlerts) ? safe.usageAlerts : [],
+    routineCache: Array.isArray(safe.routineCache) ? safe.routineCache : [],
+    labFrameworks: Array.isArray(safe.labFrameworks) ? safe.labFrameworks : [],
+    labSessions: Array.isArray(safe.labSessions) ? safe.labSessions : [],
+    labResearchPrompts: Array.isArray(safe.labResearchPrompts) ? safe.labResearchPrompts : [],
+    agent: safe.agent ? safe.agent : createDefaultDb().agent
   };
 }
 
@@ -56,9 +97,13 @@ function normalizeTask(task: Partial<Task>): Task {
     id: task.id ?? randomUUID(),
     title: task.title ?? "",
     columnId: task.columnId ?? DEFAULT_COLUMNS[0]?.id ?? "col_inbox",
-    priority: task.priority ?? "Medium",
+    priority: task.priority ?? "P2",
     tags: Array.isArray(task.tags) ? task.tags : [],
     description: task.description ?? "",
+    nextAction: task.nextAction ?? "",
+    swarmRequired: task.swarmRequired ?? false,
+    processingMode: task.processingMode ?? "realtime",
+    batchJobId: task.batchJobId,
     notes: task.notes ?? "",
     sensitiveNotes: task.sensitiveNotes ?? "",
     privateNumbers: task.privateNumbers,
@@ -100,9 +145,13 @@ export function createTask(partial: Partial<Task> & { title: string; columnId: s
     id: randomUUID(),
     title: partial.title.trim(),
     columnId: partial.columnId,
-    priority: partial.priority ?? "Medium",
+    priority: partial.priority ?? "P2",
     tags: partial.tags ?? [],
     description: partial.description ?? "",
+    nextAction: partial.nextAction ?? "",
+    swarmRequired: partial.swarmRequired ?? false,
+    processingMode: partial.processingMode ?? "realtime",
+    batchJobId: partial.batchJobId,
     notes: partial.notes ?? "",
     sensitiveNotes: partial.sensitiveNotes ?? "",
     privateNumbers: partial.privateNumbers,
