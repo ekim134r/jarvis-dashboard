@@ -1,0 +1,251 @@
+{
+  "tasks": [],
+  "columns": [
+    {
+      "id": "col_inbox",
+      "title": "Inbox",
+      "key": "inbox",
+      "order": 0
+    },
+    {
+      "id": "col_next",
+      "title": "Next",
+      "key": "next",
+      "order": 1
+    },
+    {
+      "id": "col_doing",
+      "title": "Doing",
+      "key": "doing",
+      "order": 2
+    },
+    {
+      "id": "col_waiting",
+      "title": "Waiting",
+      "key": "waiting",
+      "order": 3
+    },
+    {
+      "id": "col_done",
+      "title": "Done",
+      "key": "done",
+      "order": 4
+    }
+  ],
+  "tags": [],
+  "scripts": [],
+  "preferences": [],
+  "experiments": [],
+  "chatThreads": [],
+  "webhookEvents": [],
+  "usageEvents": [],
+  "usageAlerts": [],
+  "routineCache": [],
+  "labFrameworks": [
+    {
+      "id": "lab_luminos_launch_video_v1",
+      "title": "Luminos Launch Video v1 (Remotion) — Decisions",
+      "goal": "In <30min eine premium Announcement-Video v1 rendern können.",
+      "context": "DE Launch. B2B SaaS. Kein Voiceover (SFX-only). Apple-clean: SF Pro Display, viel Whitespace, ruhige Motion.",
+      "screenType": "video",
+      "outputFormat": "mp4",
+      "outputLength": "Medium",
+      "aiTemplate": "Answer questions, then output: final copy beats + timing suggestions + asset list.",
+      "questions": [
+        {
+          "id": "q_look",
+          "label": "Look: dark oder light?",
+          "type": "tinder",
+          "required": true,
+          "options": [
+            "dark",
+            "light"
+          ]
+        },
+        {
+          "id": "q_text_density",
+          "label": "Textdichte: ultra-minimal vs. minimal?",
+          "type": "single",
+          "required": true,
+          "options": [
+            "ultra-minimal",
+            "minimal"
+          ]
+        },
+        {
+          "id": "q_feature_order",
+          "label": "Top Features (Reihenfolge) — wähle 3",
+          "type": "multi",
+          "required": true,
+          "options": [
+            "Auto-Cut/Highlights",
+            "Captions",
+            "Multi-Format Export",
+            "Brand Presets",
+            "Team Review",
+            "Speed/Batch"
+          ]
+        },
+        {
+          "id": "q_cta_style",
+          "label": "CTA Stil",
+          "type": "single",
+          "required": true,
+          "options": [
+            "luminos-studios.de (nur URL)",
+            "Jetzt ansehen → luminos-studios.de"
+          ]
+        }
+      ],
+      "assetRequests": [
+        {
+          "id": "a_logo",
+          "label": "Logo (SVG bevorzugt) für public/brand/logo.svg",
+          "type": "image",
+          "required": true
+        },
+        {
+          "id": "a_sfx",
+          "label": "2 SFX: whoosh + soft hit (mp3/wav)",
+          "type": "other",
+          "required": false
+        },
+        {
+          "id": "a_brand_colors",
+          "label": "Brand colors (hex) optional",
+          "type": "data",
+          "required": false
+        }
+      ],
+      "createdAt": "2026-02-07T23:00:00.000Z",
+      "updatedAt": "2026-02-07T23:40:38.362Z"
+    }
+  ],
+  "labSessions": [
+    {
+      "id": "babd8d8c-f900-4026-8480-81140fae51d1",
+      "frameworkId": "lab_luminos_launch_video_v1",
+      "title": "Luminos Launch Video v1 (Remotion) — Decisions Session",
+      "answers": {
+        "q_look": "light",
+        "q_text_density": "minimal",
+        "q_feature_order": [
+          "Captions"
+        ],
+        "q_cta_style": "luminos-studios.de (nur URL)"
+      },
+      "notes": "Wichtig, es soll nicht um features sondern um das Produkt gehen. Also schau mal das alles wirklich clean motion hat, es klar redefined ist und es nicht überlanden ist. Wichtig ist das dieses video mit der intention gefertig wird. Also das du nicht annimmst der viewer kennt Luminos.\n",
+      "createdAt": "2026-02-08T01:36:45.198Z"
+    },
+    {
+      "id": "211beed9-a82e-4553-ab05-e2ed5349a2ac",
+      "frameworkId": "lab_luminos_launch_video_v1",
+      "title": "Luminos Launch Video v1 (Remotion) — Decisions Session",
+      "answers": {
+        "q_look": "light",
+        "q_text_density": "minimal",
+        "q_feature_order": [
+          "Auto-Cut/Highlights",
+          "Captions"
+        ],
+        "q_cta_style": "luminos-studios.de (nur URL)"
+      },
+      "notes": "",
+      "createdAt": "2026-02-07T23:39:48.054Z"
+    }
+  ],
+  "labResearchPrompts": [],
+  "agents": {
+    "jarvis": null,
+    "claw": null
+  },
+  "letters": [],
+  "agent": {
+    "status": "idle",
+    "gatewayStatus": "ok",
+    "metrics": {
+      "tokensUsedDaily": 0,
+      "tokensUsedWeekly": 0,
+      "messagesCount": 0,
+      "toolCallsCount": 0,
+      "totalCost": 0,
+      "uptime": 0,
+      "requestsProcessed": 0
+    },
+    "lastDeploy": {
+      "id": "deploy_boot",
+      "environment": "production",
+      "url": "https://jarvis-dashboard-dun.vercel.app",
+      "status": "success",
+      "timestamp": "2026-02-05T20:07:41.378Z"
+    },
+    "activeRuns": 0,
+    "recentRuns": [],
+    "lastActive": "2026-02-05T20:07:41.378Z"
+  },
+  "notifications": [],
+  "projects": [
+    {
+      "id": "proj_all",
+      "title": "All Projects",
+      "key": "all",
+      "description": "Global view",
+      "repos": [],
+      "domains": [],
+      "guidelinesPath": "",
+      "heartbeatProfile": "default",
+      "createdAt": "2026-02-08T17:12:37.565607Z",
+      "updatedAt": "2026-02-08T17:12:37.565794Z"
+    },
+    {
+      "id": "proj_luminos",
+      "title": "Luminos",
+      "key": "luminos",
+      "description": "Luminos Studios AI (Website + Remotion)",
+      "repos": [
+        "/Users/mikamischke/Documents/luminos-studios-ai",
+        "/Users/mikamischke/Documents/luminos-video-remotion"
+      ],
+      "domains": [
+        "luminos-studios.de"
+      ],
+      "guidelinesPath": "/Users/mikamischke/.openclaw/skills/apple-style-motion-system-protocol/SKILL.md",
+      "heartbeatProfile": "luminos",
+      "createdAt": "2026-02-08T17:12:37.565796Z",
+      "updatedAt": "2026-02-08T17:12:37.565797Z"
+    },
+    {
+      "id": "proj_jarvis",
+      "title": "Jarvis Dashboard",
+      "key": "jarvis-dashboard",
+      "description": "Second Brain UI",
+      "repos": [
+        "/Users/mikamischke/.openclaw/workspace/jarvis-dashboard"
+      ],
+      "domains": [
+        "jarvis-dashboard-dun.vercel.app"
+      ],
+      "guidelinesPath": "",
+      "heartbeatProfile": "default",
+      "createdAt": "2026-02-08T17:12:37.565798Z",
+      "updatedAt": "2026-02-08T17:12:37.565798Z"
+    },
+    {
+      "id": "proj_ops",
+      "title": "Ops / VPS",
+      "key": "ops",
+      "description": "VPS, Whisper, Hostinger",
+      "repos": [],
+      "domains": [
+        "srv1180614.hstgr.cloud"
+      ],
+      "guidelinesPath": "",
+      "heartbeatProfile": "ops",
+      "createdAt": "2026-02-08T17:12:37.565799Z",
+      "updatedAt": "2026-02-08T17:12:37.565800Z"
+    }
+  ],
+  "ui": {
+    "activeProjectId": "proj_all"
+  }
+}
