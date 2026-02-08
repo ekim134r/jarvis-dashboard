@@ -11,6 +11,8 @@ type DashboardHeaderProps = {
   taskCount: number;
   openTaskCount: number;
   doneCount: number;
+  activeProjectId: string;
+  setActiveProjectId: (id: string) => void;
 };
 
 export default function DashboardHeader({
@@ -19,6 +21,8 @@ export default function DashboardHeader({
   taskCount,
   openTaskCount,
   doneCount,
+  activeProjectId,
+  setActiveProjectId,
 }: DashboardHeaderProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
@@ -112,7 +116,10 @@ export default function DashboardHeader({
               </div>
             </div>
 
-            <ProjectSwitcher />
+            <ProjectSwitcher
+              activeProjectId={activeProjectId}
+              setActiveProjectId={setActiveProjectId}
+            />
 
             <ThemeToggle />
 

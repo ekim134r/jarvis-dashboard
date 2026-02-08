@@ -37,6 +37,7 @@ export async function POST(request: Request) {
   const task = createTask({
     title: payload.title,
     columnId: payload.columnId,
+    projectId: payload.projectId,
     priority: payload.priority,
     tags: payload.tags,
     description: payload.description,

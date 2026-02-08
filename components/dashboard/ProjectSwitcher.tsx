@@ -3,22 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Project } from "@/lib/types";
 
-const STORAGE_KEY = "jarvis_active_project_v1";
+type ProjectSwitcherProps = {
+  activeProjectId: string;
+  setActiveProjectId: (id: string) => void;
+};
 
-export default function ProjectSwitcher() {
+export default function ProjectSwitcher({
+  activeProjectId,
+  setActiveProjectId,
+}: ProjectSwitcherProps) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string>("proj_all");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) setActiveProjectId(stored);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, activeProjectId);
-  }, [activeProjectId]);
 
   useEffect(() => {
     const run = async () => {

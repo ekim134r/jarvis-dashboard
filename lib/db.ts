@@ -152,12 +152,15 @@ export async function writeDb(data: Database): Promise<void> {
   await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
-export function createTask(partial: Partial<Task> & { title: string; columnId: string }): Task {
+export function createTask(
+  partial: Partial<Task> & { title: string; columnId: string; projectId?: string }
+): Task {
   const now = new Date().toISOString();
   return {
     id: randomUUID(),
     title: partial.title.trim(),
     columnId: partial.columnId,
+    projectId: partial.projectId ?? "proj_all",
     priority: partial.priority ?? "P2",
     tags: partial.tags ?? [],
     description: partial.description ?? "",

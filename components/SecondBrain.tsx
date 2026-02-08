@@ -460,6 +460,7 @@ export default function SecondBrain() {
       id: tempId,
       title,
       columnId,
+      projectId: activeProjectId,
       priority: "P2",
       tags: [],
       description: "",
@@ -487,7 +488,7 @@ export default function SecondBrain() {
       const response = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, columnId })
+        body: JSON.stringify({ title, columnId, projectId: activeProjectId })
       });
       if (!response.ok) throw new Error("Failed");
       const created = (await response.json()) as Task;
@@ -1159,6 +1160,8 @@ export default function SecondBrain() {
               taskCount={tasks.length}
               openTaskCount={openTaskCount}
               doneCount={doneCount}
+              activeProjectId={activeProjectId}
+              setActiveProjectId={setActiveProjectId}
             />
 
             {loading ? (
