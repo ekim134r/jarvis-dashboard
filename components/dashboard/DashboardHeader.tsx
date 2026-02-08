@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import Clock from "@/components/Clock";
 import ThemeToggle from "@/components/ThemeToggle";
+import ProjectSwitcher from "@/components/dashboard/ProjectSwitcher";
 
 type DashboardHeaderProps = {
   search: string;
@@ -110,6 +111,8 @@ export default function DashboardHeader({
                 <strong className="text-text">{doneCount}</strong>
               </div>
             </div>
+
+            <ProjectSwitcher />
 
             <ThemeToggle />
 

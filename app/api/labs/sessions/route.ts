@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { readDb, writeDb } from "@/lib/db";
+import { pushNotification } from "@/lib/notify";
 import type { LabSession } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -36,6 +37,14 @@ export async function POST(request: Request) {
   };
 
   db.labSessions.unshift(session);
+
+  pushNotification(db, {
+    source: "labs",
+    type: "session_saved",
+    title: `Labs: Session saved — ${framework.title}`,
+    body: `${Object.keys(session.answers || {}).length} answers · ${session.title}`
+  });
+
   await writeDb(db);
   return NextResponse.json(session, { status: 201 });
 }

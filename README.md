@@ -34,7 +34,13 @@ Then open `http://<your-ip>:3000` from another device on the network.
 
 ## Data Storage
 
-All data is stored locally at `data/db.json` in this repo. The app reads and writes via Next.js Route Handlers under `app/api/*`.
+Default: `data/db.json` in this repo.
+
+Override (recommended for VPS / multiple instances): set
+
+- `JARVIS_DB_PATH=/var/lib/jarvis-dashboard/jarvis.db.json` (example)
+
+The app reads and writes via Next.js Route Handlers under `app/api/*`.
 
 ## Health Endpoint
 

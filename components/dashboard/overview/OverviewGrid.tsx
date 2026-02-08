@@ -7,13 +7,14 @@ import MetricsPanel from "./MetricsPanel";
 type OverviewGridProps = {
   agentState: AgentState;
   heroDate: string;
+  vps?: { health?: string; uptimeSec?: number } | null;
 };
 
-export default function OverviewGrid({ agentState, heroDate }: OverviewGridProps) {
+export default function OverviewGrid({ agentState, heroDate, vps }: OverviewGridProps) {
   return (
     <div className="mb-6 flex flex-col gap-6">
       {/* 1. Now / Ops Bar */}
-      <OpsBar agentState={agentState} />
+      <OpsBar agentState={agentState} vps={vps} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Left Column: Metrics + Additional Info */}

@@ -12,6 +12,7 @@ import PlannerView from "@/components/dashboard/PlannerView";
 import PreferencesView from "@/components/dashboard/PreferencesView";
 import ExperimentsView from "@/components/dashboard/ExperimentsView";
 import LabsView from "@/components/dashboard/LabsView";
+import SkillsView from "@/components/dashboard/SkillsView";
 import ScriptsView from "@/components/dashboard/ScriptsView";
 import IntegrationsView from "@/components/dashboard/IntegrationsView";
 import { OverviewSkeleton } from "@/components/ui/Skeletons";
@@ -133,10 +134,11 @@ export default function SecondBrain() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [scripts, setScripts] = useState<Script[]>([]);
   const [agentState, setAgentState] = useState<AgentState | null>(null);
+  const [vpsStatus, setVpsStatus] = useState<{ health?: string; uptimeSec?: number } | null>(null);
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<
-    "board" | "planner" | "preferences" | "experiments" | "labs" | "scripts" | "integrations"
+    "board" | "planner" | "preferences" | "experiments" | "labs" | "skills" | "scripts" | "integrations"
   >("board");
 
   useEffect(() => {
@@ -147,7 +149,8 @@ export default function SecondBrain() {
       stored === "planner" ||
       stored === "preferences" ||
       stored === "experiments" ||
-      stored === "labs"
+      stored === "labs" ||
+      stored === "skills"
     ) {
       setActiveView(stored);
     }
@@ -255,6 +258,20 @@ export default function SecondBrain() {
   // Derived
   const columnsSorted = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns]);
 
+  const ACTIVE_PROJECT_KEY = "jarvis_active_project_v1";
+  const [activeProjectId, setActiveProjectId] = useState<string>("proj_all");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(ACTIVE_PROJECT_KEY);
+    if (stored) setActiveProjectId(stored);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
+  }, [activeProjectId]);
+
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     const matchesQuery = (task: Task) => {
@@ -266,10 +283,14 @@ export default function SecondBrain() {
       if (activeTags.length === 0) return true;
       return task.tags.some((tagId) => activeTags.includes(tagId));
     };
+    const matchesProject = (task: Task) => {
+      if (!activeProjectId || activeProjectId === "proj_all") return true;
+      return task.projectId === activeProjectId;
+    };
     return tasks
-      .filter((task) => matchesQuery(task) && matchesTags(task))
+      .filter((task) => matchesProject(task) && matchesQuery(task) && matchesTags(task))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, [tasks, search, activeTags]);
+  }, [tasks, search, activeTags, activeProjectId]);
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, Task[]> = {};
@@ -334,7 +355,8 @@ export default function SecondBrain() {
           scriptsData,
           preferencesData,
           experimentsData,
-          agentData
+          agentData,
+          vpsPayload
         ] = await Promise.all([
           fetchJson<Column[]>("/api/columns"),
           fetchJson<Task[]>("/api/tasks"),
@@ -342,7 +364,8 @@ export default function SecondBrain() {
           fetchJson<Script[]>("/api/scripts"),
           fetchJson<Preference[]>("/api/preferences"),
           fetchJson<Experiment[]>("/api/experiments"),
-          fetchJson<AgentState>("/api/agent/data")
+          fetchJson<AgentState>("/api/agent/data"),
+          fetchJson<{ ok: boolean; data?: any }>("/api/integrations/vps/status").catch(() => ({ ok: false, data: null }))
         ]);
         setColumns(columnsData);
         setTasks(tasksData);
@@ -351,6 +374,12 @@ export default function SecondBrain() {
         setPreferences(preferencesData);
         setExperiments(experimentsData);
         setAgentState(agentData);
+        if (vpsPayload?.ok && vpsPayload.data && typeof vpsPayload.data === "object") {
+          const d: any = vpsPayload.data;
+          setVpsStatus({ health: d.health, uptimeSec: d.uptimeSec });
+        } else {
+          setVpsStatus(null);
+        }
       } catch (err) {
         setError("Unable to load data. Please refresh the page.");
         notifyError("Unable to load data", "Please refresh the page.");
@@ -1136,6 +1165,7 @@ export default function SecondBrain() {
                 <OverviewGrid
                   agentState={agentState}
                   heroDate={heroDateFormatter.format(new Date())}
+                  vps={vpsStatus}
                 />
               )
             )}
@@ -1259,6 +1289,12 @@ export default function SecondBrain() {
         {activeView === "labs" && (
           <div className="animate-fade-in">
             <LabsView />
+          </div>
+        )}
+
+        {activeView === "skills" && (
+          <div className="animate-fade-in">
+            <SkillsView />
           </div>
         )}
 

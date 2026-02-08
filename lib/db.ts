@@ -11,8 +11,11 @@ import type {
   Task
 } from "@/lib/types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "db.json");
+const DEFAULT_DATA_DIR = path.join(process.cwd(), "data");
+const DB_PATH = process.env.JARVIS_DB_PATH
+  ? path.resolve(process.env.JARVIS_DB_PATH)
+  : path.join(DEFAULT_DATA_DIR, "db.json");
+const DATA_DIR = path.dirname(DB_PATH);
 
 const DEFAULT_COLUMNS: Column[] = [
   { id: "col_inbox", title: "Inbox", key: "inbox", order: 0 },
@@ -39,6 +42,8 @@ function createDefaultDb(): Database {
     labFrameworks: [],
     labSessions: [],
     labResearchPrompts: [],
+    agents: { jarvis: null, claw: null },
+    letters: [],
     agent: {
       status: "idle",
       gatewayStatus: "ok",
@@ -75,6 +80,8 @@ function normalizeDatabase(input: Partial<Database> | undefined): Database {
       Array.isArray(safe.columns) && safe.columns.length > 0
         ? safe.columns
         : createDefaultDb().columns,
+    projects: Array.isArray((safe as any).projects) ? ((safe as any).projects as any) : [],
+    ui: (safe as any).ui && typeof (safe as any).ui === "object" ? ((safe as any).ui as any) : { activeProjectId: "proj_all" },
     tags: Array.isArray(safe.tags) ? safe.tags : [],
     scripts: Array.isArray(safe.scripts) ? safe.scripts : [],
     preferences: Array.isArray(safe.preferences) ? safe.preferences : [],
@@ -87,6 +94,11 @@ function normalizeDatabase(input: Partial<Database> | undefined): Database {
     labFrameworks: Array.isArray(safe.labFrameworks) ? safe.labFrameworks : [],
     labSessions: Array.isArray(safe.labSessions) ? safe.labSessions : [],
     labResearchPrompts: Array.isArray(safe.labResearchPrompts) ? safe.labResearchPrompts : [],
+    agents:
+      safe.agents && typeof safe.agents === "object"
+        ? (safe.agents as any)
+        : createDefaultDb().agents,
+    letters: Array.isArray((safe as any).letters) ? ((safe as any).letters as any) : [],
     agent: safe.agent ? safe.agent : createDefaultDb().agent
   };
 }
@@ -98,6 +110,7 @@ function normalizeTask(task: Partial<Task>): Task {
     title: task.title ?? "",
     columnId: task.columnId ?? DEFAULT_COLUMNS[0]?.id ?? "col_inbox",
     priority: task.priority ?? "P2",
+    projectId: (task as any).projectId,
     tags: Array.isArray(task.tags) ? task.tags : [],
     description: task.description ?? "",
     nextAction: task.nextAction ?? "",

@@ -3,9 +3,21 @@ import { AgentState } from "@/lib/types";
 
 type OpsBarProps = {
   agentState: AgentState;
+  vps?: { health?: string; uptimeSec?: number } | null;
 };
 
-export default function OpsBar({ agentState }: OpsBarProps) {
+function formatUptime(seconds?: number) {
+  if (!seconds || !Number.isFinite(seconds)) return "—";
+  const s = Math.max(0, Math.floor(seconds));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+export default function OpsBar({ agentState, vps }: OpsBarProps) {
   const { status, gatewayStatus, activeRuns, lastDeploy, metrics } = agentState;
   
   const isDeploySuccess = lastDeploy.status === "success";
@@ -54,6 +66,27 @@ export default function OpsBar({ agentState }: OpsBarProps) {
                 {new URL(lastDeploy.url).hostname}
               </a>
             </div>
+          </div>
+        </div>
+
+        <div className="hidden h-8 w-px bg-border/50 sm:block" />
+
+        {/* VPS Status */}
+        <div className="flex items-center gap-3">
+          <div
+            className={`h-2 w-2 rounded-full ${
+              !vps
+                ? "bg-muted"
+                : vps.health && vps.health.toLowerCase() === "ok"
+                ? "bg-emerald-500"
+                : "bg-amber-500"
+            }`}
+          />
+          <div className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">VPS</span>
+            <span className="text-sm font-semibold text-text">
+              {!vps ? "Not connected" : `${vps.health ?? "unknown"} • ${formatUptime(vps.uptimeSec)}`}
+            </span>
           </div>
         </div>
 

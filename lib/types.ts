@@ -20,6 +20,7 @@ export type Task = {
   title: string;
   columnId: string;
   priority: Priority;
+  projectId?: string;
   tags: string[];
   description: string;
   owner?: "Mika" | "Jarvis";
@@ -48,6 +49,19 @@ export type Column = {
   title: string;
   key?: string;
   order: number;
+};
+
+export type Project = {
+  id: string;
+  title: string;
+  key: string;
+  description?: string;
+  repos: string[];
+  domains: string[];
+  guidelinesPath?: string;
+  heartbeatProfile?: "default" | "luminos" | "ops";
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Tag = {
@@ -163,6 +177,12 @@ export type AgentState = {
   lastActive: string;
 };
 
+export type VpsStatus = {
+  health?: string;
+  uptimeSec?: number;
+  [key: string]: unknown;
+};
+
 export type ChatRole = "system" | "user" | "assistant";
 
 export type ChatMessage = {
@@ -272,18 +292,60 @@ export type LabResearchPrompt = {
   createdAt: string;
 };
 
+export type AgentSlot = {
+  updatedAt: string;
+  state: unknown;
+} | null;
+
+export type AgentSlots = {
+  jarvis: AgentSlot;
+  claw: AgentSlot;
+};
+
+export type BridgeLetterStatus = "queued" | "claimed" | "done" | "failed";
+
+export type BridgeLetter = {
+  id: string;
+  from: "jarvis" | "claw";
+  to: "jarvis" | "claw";
+  title: string;
+  payload: string;
+  status: BridgeLetterStatus;
+  claimedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationLevel = "info" | "warn" | "critical";
+
+export type Notification = {
+  id: string;
+  level: NotificationLevel;
+  source: string;
+  type: string;
+  title: string;
+  body?: string;
+  read: boolean;
+  createdAt: string;
+};
+
 export type Database = {
   tasks: Task[];
   columns: Column[];
+  projects?: Project[];
+  ui?: { activeProjectId?: string };
   tags: Tag[];
   scripts: Script[];
   preferences: Preference[];
   experiments: Experiment[];
   agent: AgentState;
+  agents?: AgentSlots;
+  letters?: BridgeLetter[];
   chatThreads: ChatThread[];
   webhookEvents: WebhookEvent[];
   usageEvents: UsageEvent[];
   usageAlerts: UsageAlert[];
+  notifications?: Notification[];
   routineCache: RoutineCacheEntry[];
   labFrameworks: LabFramework[];
   labSessions: LabSession[];

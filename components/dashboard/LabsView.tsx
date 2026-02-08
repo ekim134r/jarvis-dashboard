@@ -179,6 +179,7 @@ export default function LabsView() {
   const [showResearch, setShowResearch] = useState(false);
   const [dragQuestionId, setDragQuestionId] = useState<string | null>(null);
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"run" | "build">("run");
 
   const selectedFramework = useMemo(
     () => frameworks.find((item) => item.id === selectedFrameworkId) || null,
@@ -563,13 +564,40 @@ export default function LabsView() {
             Human Intelligence Lab
           </p>
           <h2 className="font-display text-3xl font-bold tracking-tight text-text">
-            Frameworks, Questions, Signals
+            {viewMode === "run" ? "Run Session" : "Framework Studio"}
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-muted">
-            Design prompts, collect human inputs, and ship clean blueprints for agents.
+            {viewMode === "run"
+              ? "Schritt-für-Schritt Fragen beantworten (Typeform/Tinder Style)."
+              : "Frameworks bauen, Fragen definieren, Signals sammeln."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-full border border-border bg-surface-muted">
+            <button
+              type="button"
+              onClick={() => setViewMode("run")}
+              className={`px-3 py-1 text-xs font-bold transition-colors ${
+                viewMode === "run"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted hover:text-text"
+              }`}
+            >
+              Run
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("build")}
+              className={`px-3 py-1 text-xs font-bold transition-colors ${
+                viewMode === "build"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted hover:text-text"
+              }`}
+            >
+              Build
+            </button>
+          </div>
+
           <div className="rounded-full border border-border bg-surface-muted px-3 py-1 text-xs font-bold text-muted">
             {frameworks.length} frameworks
           </div>
@@ -582,9 +610,16 @@ export default function LabsView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[340px_1fr_340px]">
+      <div
+        className={`grid grid-cols-1 gap-6 ${
+          viewMode === "run"
+            ? "xl:grid-cols-[340px_1fr]"
+            : "xl:grid-cols-[340px_1fr_340px]"
+        }`}
+      >
         <div className="flex flex-col gap-6">
-          <div className="lab-grid rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
+          {viewMode === "build" && (
+            <div className="lab-grid rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.2em] text-muted/80">
@@ -692,6 +727,7 @@ export default function LabsView() {
               </button>
             </div>
           </div>
+          )}
 
           <div className="rounded-2xl border border-border bg-surface-muted/60 p-4 shadow-sm">
             <div className="flex items-center justify-between">
@@ -775,12 +811,13 @@ export default function LabsView() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <div className="rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-[0.2em] text-muted/80">
-                  Question Builder
-                </div>
+          {viewMode === "build" && (
+            <div className="rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-muted/80">
+                    Question Builder
+                  </div>
                 <div className="mt-1 text-lg font-bold text-text">Typeform-ready prompts</div>
               </div>
               <div className="rounded-full border border-border bg-surface px-3 py-1 text-[11px] font-semibold text-muted">
@@ -927,6 +964,7 @@ export default function LabsView() {
               )}
             </div>
           </div>
+          )}
 
           <div className="rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1120,8 +1158,9 @@ export default function LabsView() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-6">
-          <div className="rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
+        {viewMode === "build" && (
+          <div className="flex flex-col gap-6">
+            <div className="rounded-2xl border border-border bg-surface-muted/60 p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.2em] text-muted/80">
@@ -1484,6 +1523,7 @@ export default function LabsView() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </section>
   );
