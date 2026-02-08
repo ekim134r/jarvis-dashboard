@@ -365,7 +365,7 @@ export default function SecondBrain() {
           fetchJson<Preference[]>("/api/preferences"),
           fetchJson<Experiment[]>("/api/experiments"),
           fetchJson<AgentState>("/api/agent/data"),
-          fetchJson<{ ok: boolean; data?: any }>("/api/integrations/vps/status").catch(() => ({ ok: false, data: null }))
+          fetchJson<{ ok: boolean; data?: any; error?: string }>("/api/integrations/vps/status").catch(() => ({ ok: false, data: null }))
         ]);
         setColumns(columnsData);
         setTasks(tasksData);
@@ -378,11 +378,14 @@ export default function SecondBrain() {
           const d: any = vpsPayload.data;
           setVpsStatus({ health: d.health, uptimeSec: d.uptimeSec });
         } else {
+          // Missing env or transient failures shouldn't nuke the whole dashboard
           setVpsStatus(null);
         }
       } catch (err) {
         setError("Unable to load data. Please refresh the page.");
         notifyError("Unable to load data", "Please refresh the page.");
+        // Keep dashboard usable even if some integrations fail
+        setVpsStatus(null);
       } finally {
         setLoading(false);
       }
