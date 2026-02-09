@@ -10,6 +10,7 @@ type ViewId =
   | "labs"
   | "assets"
   | "skills"
+  | "research"
   | "scripts"
   | "integrations";
 
@@ -55,6 +56,11 @@ const views = [
     icon: "M5.25 6.75h13.5m-13.5 3.75h13.5m-13.5 3.75h9.75M7.5 3.75h9A2.25 2.25 0 0118.75 6v12A2.25 2.25 0 0116.5 20.25h-9A2.25 2.25 0 015.25 18V6A2.25 2.25 0 017.5 3.75z"
   },
   {
+    id: "research",
+    label: "Research",
+    icon: "M10.5 3.75a6.75 6.75 0 104.22 12.01l4.76 4.77a.75.75 0 101.06-1.06l-4.77-4.76A6.75 6.75 0 0010.5 3.75z"
+  },
+  {
     id: "scripts",
     label: "Scripts",
     icon: "M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5",
@@ -71,12 +77,21 @@ const views = [
 const allViews = [...views] as const;
 
 const groups: { label: string; ids: ViewId[] }[] = [
-  { label: "Core", ids: ["board", "planner", "preferences", "labs"] },
+  { label: "Core", ids: ["board", "planner", "preferences", "research", "labs"] },
   { label: "Ops", ids: ["assets", "skills", "experiments"] },
   { label: "AI Control", ids: ["scripts", "integrations"] }
 ];
 
-const mobileViewOrder: ViewId[] = ["board", "planner", "labs", "preferences", "assets", "skills", "experiments"];
+const mobileViewOrder: ViewId[] = [
+  "board",
+  "planner",
+  "research",
+  "labs",
+  "preferences",
+  "assets",
+  "skills",
+  "experiments"
+];
 
 export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
   const viewMap = new Map(allViews.map((view) => [view.id, view]));

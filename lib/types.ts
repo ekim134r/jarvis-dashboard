@@ -292,6 +292,19 @@ export type LabResearchPrompt = {
   createdAt: string;
 };
 
+export type ResearchCard = {
+  id: string;
+  title: string;
+  background: string;
+  question: string;
+  constraints: string;
+  outputSchema: string; // JSON Schema (stringified)
+  prompt: string;
+  result: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AgentSlot = {
   updatedAt: string;
   state: unknown;
@@ -350,4 +363,5 @@ export type Database = {
   labFrameworks: LabFramework[];
   labSessions: LabSession[];
   labResearchPrompts: LabResearchPrompt[];
+  researchCards?: ResearchCard[];
 };

@@ -6,6 +6,7 @@ import type {
   Database,
   Experiment,
   Preference,
+  ResearchCard,
   Script,
   Tag,
   Task
@@ -42,6 +43,7 @@ function createDefaultDb(): Database {
     labFrameworks: [],
     labSessions: [],
     labResearchPrompts: [],
+    researchCards: [],
     agents: { jarvis: null, claw: null },
     letters: [],
     agent: {
@@ -94,6 +96,9 @@ function normalizeDatabase(input: Partial<Database> | undefined): Database {
     labFrameworks: Array.isArray(safe.labFrameworks) ? safe.labFrameworks : [],
     labSessions: Array.isArray(safe.labSessions) ? safe.labSessions : [],
     labResearchPrompts: Array.isArray(safe.labResearchPrompts) ? safe.labResearchPrompts : [],
+    researchCards: Array.isArray((safe as any).researchCards)
+      ? (((safe as any).researchCards as any) as ResearchCard[])
+      : [],
     agents:
       safe.agents && typeof safe.agents === "object"
         ? (safe.agents as any)
