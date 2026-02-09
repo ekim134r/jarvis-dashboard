@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readDb, writeDb } from "@/lib/db";
 import type { Script } from "@/lib/types";
+import { requireFsUnlocked } from "@/lib/fsLock";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,11 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function PATCH(request: Request, { params }: Params) {
+  const gate = requireFsUnlocked();
+  if (!gate.ok) {
+    return NextResponse.json({ ok: false, error: "locked" }, { status: gate.status });
+  }
+
   const patch = (await request.json()) as Partial<Script>;
   const db = await readDb();
   const index = db.scripts.findIndex((item) => item.id === params.id);
@@ -42,6 +48,11 @@ export async function PATCH(request: Request, { params }: Params) {
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
+  const gate = requireFsUnlocked();
+  if (!gate.ok) {
+    return NextResponse.json({ ok: false, error: "locked" }, { status: gate.status });
+  }
+
   const db = await readDb();
   const index = db.scripts.findIndex((item) => item.id === params.id);
 

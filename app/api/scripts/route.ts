@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createScript, readDb, writeDb } from "@/lib/db";
 import type { Script } from "@/lib/types";
+import { requireFsUnlocked } from "@/lib/fsLock";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const gate = requireFsUnlocked();
+  if (!gate.ok) {
+    return NextResponse.json({ ok: false, error: "locked" }, { status: gate.status });
+  }
+
   const payload = (await request.json()) as Partial<Script>;
 
   if (!payload.name || !payload.command) {

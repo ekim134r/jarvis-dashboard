@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { readDb } from "@/lib/db";
+import { requireFsUnlocked } from "@/lib/fsLock";
 
 export const runtime = "nodejs";
 
 export async function GET() {
+  const gate = requireFsUnlocked();
+  if (!gate.ok) {
+    return NextResponse.json({ ok: false, error: "locked" }, { status: gate.status });
+  }
+
   try {
     const db = await readDb();
     return NextResponse.json({

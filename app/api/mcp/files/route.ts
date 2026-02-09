@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { requireFsUnlocked } from "@/lib/fsLock";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,11 @@ async function buildEntry(input: string, includeContent: boolean): Promise<FileE
 }
 
 export async function GET(request: Request) {
+  const gate = requireFsUnlocked();
+  if (!gate.ok) {
+    return NextResponse.json({ ok: false, error: "locked" }, { status: gate.status });
+  }
+
   try {
     const url = new URL(request.url);
     const includeContent = url.searchParams.get("include") === "content";

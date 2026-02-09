@@ -3,6 +3,7 @@ import { readDb, writeDb } from "@/lib/db";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { requireFsUnlocked } from "@/lib/fsLock";
 
 export const runtime = "nodejs";
 
@@ -64,6 +65,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const gate = requireFsUnlocked();
+  if (!gate.ok) {
+    return NextResponse.json({ ok: false, error: "locked" }, { status: gate.status });
+  }
+
   const now = new Date().toISOString();
   const contentType = req.headers.get("content-type") || "";
 
