@@ -12,6 +12,7 @@ import PlannerView from "@/components/dashboard/PlannerView";
 import PreferencesView from "@/components/dashboard/PreferencesView";
 import ExperimentsView from "@/components/dashboard/ExperimentsView";
 import LabsView from "@/components/dashboard/LabsView";
+import AssetsView from "@/components/dashboard/AssetsView";
 import SkillsView from "@/components/dashboard/SkillsView";
 import ScriptsView from "@/components/dashboard/ScriptsView";
 import IntegrationsView from "@/components/dashboard/IntegrationsView";
@@ -138,7 +139,7 @@ export default function SecondBrain() {
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<
-    "board" | "planner" | "preferences" | "experiments" | "labs" | "skills" | "scripts" | "integrations"
+    "board" | "planner" | "preferences" | "experiments" | "labs" | "assets" | "skills" | "scripts" | "integrations"
   >("board");
 
   useEffect(() => {
@@ -150,6 +151,7 @@ export default function SecondBrain() {
       stored === "preferences" ||
       stored === "experiments" ||
       stored === "labs" ||
+      stored === "assets" ||
       stored === "skills"
     ) {
       setActiveView(stored);
@@ -1295,6 +1297,12 @@ export default function SecondBrain() {
         {activeView === "labs" && (
           <div className="animate-fade-in">
             <LabsView />
+          </div>
+        )}
+
+        {activeView === "assets" && (
+          <div className="animate-fade-in">
+            <AssetsView />
           </div>
         )}
 
