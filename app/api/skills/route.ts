@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
+import { ensureSkillsDir, SKILLS_DIR } from "@/lib/skills";
+
+export const runtime = "nodejs";
 
 type SkillEntry = {
   name: string;
@@ -9,7 +12,7 @@ type SkillEntry = {
 };
 
 export async function GET() {
-  const skillsDir = path.join(process.env.HOME || "", ".openclaw", "skills");
+  const skillsDir = ensureSkillsDir();
   let entries: SkillEntry[] = [];
 
   try {
@@ -22,9 +25,9 @@ export async function GET() {
         return { name: d.name, path: p, hasSkillMd: has };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  } catch (e) {
+  } catch {
     entries = [];
   }
 
-  return NextResponse.json({ skillsDir, entries });
+  return NextResponse.json({ skillsDir: SKILLS_DIR, entries });
 }
