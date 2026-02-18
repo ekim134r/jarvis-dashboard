@@ -13,6 +13,7 @@ import PlannerView from "@/components/dashboard/PlannerView";
 import PreferencesView from "@/components/dashboard/PreferencesView";
 import ExperimentsView from "@/components/dashboard/ExperimentsView";
 import ResearchCardsView from "@/components/dashboard/ResearchCardsView";
+import ProjectsView from "@/components/dashboard/ProjectsView";
 import LabsView from "@/components/dashboard/LabsView";
 import AssetsView from "@/components/dashboard/AssetsView";
 import SkillsView from "@/components/dashboard/SkillsView";
@@ -146,6 +147,7 @@ export default function SecondBrain() {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<
     | "board"
+    | "projects"
     | "planner"
     | "preferences"
     | "experiments"
@@ -165,6 +167,7 @@ export default function SecondBrain() {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
     if (
       stored === "board" ||
+      stored === "projects" ||
       stored === "features" ||
       stored === "planner" ||
       stored === "preferences" ||
@@ -1263,6 +1266,12 @@ export default function SecondBrain() {
               setNewTaskTitles={setNewTaskTitles}
               createTask={createTask}
             />
+          </div>
+        )}
+
+        {activeView === "projects" && (
+          <div className="animate-fade-in">
+            <ProjectsView tasks={tasks} columns={columns} />
           </div>
         )}
 
