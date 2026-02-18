@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import Sidebar from "@/components/dashboard/Sidebar";
+import ControlPanel from "@/components/dashboard/ControlPanel";
 import OverviewGrid from "@/components/dashboard/overview/OverviewGrid";
 import TagManager from "@/components/dashboard/TagManager";
 import TagManagerModal from "@/components/dashboard/TagManagerModal";
@@ -17,6 +18,10 @@ import AssetsView from "@/components/dashboard/AssetsView";
 import SkillsView from "@/components/dashboard/SkillsView";
 import ScriptsView from "@/components/dashboard/ScriptsView";
 import IntegrationsView from "@/components/dashboard/IntegrationsView";
+import TelemetryView from "@/components/dashboard/TelemetryView";
+import CanvasView from "@/components/dashboard/CanvasView";
+import LuminosIntakeEphemeral from "@/components/dashboard/LuminosIntakeEphemeral";
+import FeatureSelectionView from "@/components/dashboard/FeatureSelectionView";
 import { OverviewSkeleton } from "@/components/ui/Skeletons";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -146,10 +151,13 @@ export default function SecondBrain() {
     | "experiments"
     | "research"
     | "labs"
+    | "health"
+    | "canvas"
     | "assets"
     | "skills"
     | "scripts"
     | "integrations"
+    | "features"
   >("board");
 
   useEffect(() => {
@@ -157,11 +165,14 @@ export default function SecondBrain() {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
     if (
       stored === "board" ||
+      stored === "features" ||
       stored === "planner" ||
       stored === "preferences" ||
       stored === "experiments" ||
       stored === "research" ||
       stored === "labs" ||
+      stored === "health" ||
+      stored === "canvas" ||
       stored === "assets" ||
       stored === "skills" ||
       stored === "scripts" ||
@@ -1164,8 +1175,8 @@ export default function SecondBrain() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] gap-6 px-4 pb-24 pt-4 lg:pb-6 lg:pt-6">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} />
+    <div className="mx-auto flex w-full max-w-[1600px] gap-5 px-4 pb-24 pt-4 lg:pb-6 lg:pt-6">
+      <Sidebar activeView={activeView} setActiveView={setActiveView} activeProjectId={activeProjectId} setActiveProjectId={setActiveProjectId} />
       <main className="min-w-0 flex-1">
         {activeView === "board" && (
           <>
@@ -1187,6 +1198,17 @@ export default function SecondBrain() {
                   agentState={agentState}
                   heroDate={heroDateFormatter.format(new Date())}
                   vps={vpsStatus}
+                  tasks={tasks}
+                  columns={columns}
+                  taskCounts={{
+                    open: openTaskCount,
+                    inProgress: tasks.filter((task) => {
+                      const column = columns.find((col) => col.id === task.columnId);
+                      return column?.key === "in-progress" || column?.key === "doing";
+                    }).length,
+                    done: doneCount,
+                    total: tasks.length,
+                  }}
                 />
               )
             )}
@@ -1331,6 +1353,19 @@ export default function SecondBrain() {
           </div>
         )}
 
+        {activeView === "health" && (
+          <div className="animate-fade-in">
+            <TelemetryView />
+          </div>
+        )}
+
+        {activeView === "canvas" && (
+          <div className="animate-fade-in space-y-6">
+            <LuminosIntakeEphemeral />
+            <CanvasView />
+          </div>
+        )}
+
         {activeView === "scripts" && (
           <div className="animate-fade-in">
             <ScriptsView
@@ -1350,12 +1385,19 @@ export default function SecondBrain() {
           </div>
         )}
 
+        {activeView === "features" && (
+          <div className="animate-fade-in">
+            <FeatureSelectionView />
+          </div>
+        )}
+
         {activeView === "integrations" && (
           <div className="animate-fade-in">
             <IntegrationsView />
           </div>
         )}
       </main>
+      <ControlPanel agentState={agentState} tasks={tasks} columns={columns} />
     </div>
   );
 }
